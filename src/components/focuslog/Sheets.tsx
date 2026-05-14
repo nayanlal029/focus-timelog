@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +19,14 @@ interface SaveSheetProps {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   draft: { categoryId: string; categoryName: string; start: number; end: number; activeMs: number } | null;
+  initialNote?: string;
   onSave: (note: string) => void;
   onDiscard: () => void;
 }
 
-export function SaveActivitySheet({ open, onOpenChange, draft, onSave, onDiscard }: SaveSheetProps) {
+export function SaveActivitySheet({ open, onOpenChange, draft, initialNote, onSave, onDiscard }: SaveSheetProps) {
   const [note, setNote] = useState("");
+  useEffect(() => { if (open) setNote(initialNote ?? ""); }, [open, initialNote]);
   if (!draft) return null;
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) setNote(""); onOpenChange(o); }}>
