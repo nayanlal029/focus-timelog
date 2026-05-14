@@ -94,13 +94,15 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <FocusLogProvider>
-        <FilterProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-        </FilterProvider>
-      </FocusLogProvider>
+      <AuthProvider>
+        <FocusLogProvider>
+          <FilterProvider>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+          </FilterProvider>
+        </FocusLogProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
