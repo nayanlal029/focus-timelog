@@ -300,10 +300,10 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
     ready, categories, blocks, active, liveTick, theme,
     addCategory, updateCategory, deleteCategory, reorderCategories,
     startActivity, pauseActivity, resumeActivity, stopActivity, cancelActivity,
-    addPastBlock, updateBlock, deleteBlock,
+    addPastBlock, addManyPastBlocks, updateBlock, deleteBlock,
     setTheme, clearAllData,
     getCategory, computeActiveMs, computeBreakMs,
-  }), [ready, categories, blocks, active, liveTick, theme, addCategory, updateCategory, deleteCategory, reorderCategories, startActivity, pauseActivity, resumeActivity, stopActivity, cancelActivity, addPastBlock, updateBlock, deleteBlock, setTheme, clearAllData, getCategory, computeActiveMs, computeBreakMs]);
+  }), [ready, categories, blocks, active, liveTick, theme, addCategory, updateCategory, deleteCategory, reorderCategories, startActivity, pauseActivity, resumeActivity, stopActivity, cancelActivity, addPastBlock, addManyPastBlocks, updateBlock, deleteBlock, setTheme, clearAllData, getCategory, computeActiveMs, computeBreakMs]);
 
   return <FocusLogContext.Provider value={value}>{children}</FocusLogContext.Provider>;
 }
