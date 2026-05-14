@@ -98,10 +98,10 @@ export function buildImportPlan(
   const defaultDur = (opts.defaultDurationSec ?? 60) * 1000;
   const maxVisitMs = (opts.maxVisitDurationMin ?? 10) * 60_000;
 
-  const data = raw as ChromeHistoryFile;
-  const all = (data["Browser History"] ?? []).filter((v) => v && typeof v.url === "string" && typeof v.time_usec === "number");
+  const all = extractVisits(raw).filter((v) => v && typeof v.url === "string");
   const visits = all
-    .map((v) => ({ ...v, ms: Math.floor(v.time_usec / 1000) }))
+    .map((v) => ({ ...v, ms: visitMs(v) }))
+    .filter((v): v is ChromeVisit & { ms: number } => v.ms !== null)
     .filter((v) => (!opts.fromMs || v.ms >= opts.fromMs) && (!opts.toMs || v.ms <= opts.toMs))
     .sort((a, b) => a.ms - b.ms);
 
