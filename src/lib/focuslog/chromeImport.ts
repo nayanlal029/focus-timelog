@@ -3,11 +3,29 @@ import type { Category, CategoryType } from "./types";
 interface ChromeVisit {
   url: string;
   title?: string;
-  time_usec: number;
+  time_usec?: number; // Google Takeout (microseconds)
+  visitTime?: number; // Quick Chrome History Export (milliseconds)
 }
 
-interface ChromeHistoryFile {
-  "Browser History"?: ChromeVisit[];
+type ChromeHistoryFile =
+  | { "Browser History"?: ChromeVisit[] }
+  | ChromeVisit[];
+
+function extractVisits(raw: unknown): ChromeVisit[] {
+  if (Array.isArray(raw)) return raw as ChromeVisit[];
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj["Browser History"])) return obj["Browser History"] as ChromeVisit[];
+    // Some exports nest under other keys; try first array property
+    for (const v of Object.values(obj)) if (Array.isArray(v)) return v as ChromeVisit[];
+  }
+  return [];
+}
+
+function visitMs(v: ChromeVisit): number | null {
+  if (typeof v.visitTime === "number" && isFinite(v.visitTime)) return Math.floor(v.visitTime);
+  if (typeof v.time_usec === "number" && isFinite(v.time_usec)) return Math.floor(v.time_usec / 1000);
+  return null;
 }
 
 // Hostname keyword → suggested category name + type fallback
@@ -80,10 +98,10 @@ export function buildImportPlan(
   const defaultDur = (opts.defaultDurationSec ?? 60) * 1000;
   const maxVisitMs = (opts.maxVisitDurationMin ?? 10) * 60_000;
 
-  const data = raw as ChromeHistoryFile;
-  const all = (data["Browser History"] ?? []).filter((v) => v && typeof v.url === "string" && typeof v.time_usec === "number");
+  const all = extractVisits(raw).filter((v) => v && typeof v.url === "string");
   const visits = all
-    .map((v) => ({ ...v, ms: Math.floor(v.time_usec / 1000) }))
+    .map((v) => ({ ...v, ms: visitMs(v) }))
+    .filter((v): v is ChromeVisit & { ms: number } => v.ms !== null)
     .filter((v) => (!opts.fromMs || v.ms >= opts.fromMs) && (!opts.toMs || v.ms <= opts.toMs))
     .sort((a, b) => a.ms - b.ms);
 
