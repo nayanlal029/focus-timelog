@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { dayKey, fmtDuration } from "@/lib/focuslog/format";
 import { Timeline } from "@/components/focuslog/Timeline";
+import { HourGantt } from "@/components/focuslog/HourGantt";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/history")({
@@ -46,6 +47,7 @@ function HistoryScreen() {
 
   const dayBlocks = blocks.filter((b) => dayKey(b.start) === selected);
   const summary = blocksByDay.get(selected);
+  const selectedDayStart = new Date(selected + "T00:00:00").getTime();
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-6">
@@ -82,30 +84,49 @@ function HistoryScreen() {
             const data = blocksByDay.get(c.key);
             const isSelected = selected === c.key;
             const isToday = c.key === dayKey(Date.now());
+            const total = data ? data.focus + data.distraction + data.neutral : 0;
+            const focusPct = total > 0 ? (data!.focus / total) * 100 : 0;
+            const distPct = total > 0 ? (data!.distraction / total) * 100 : 0;
+            const focusH = data ? data.focus / 3600000 : 0;
             return (
               <button
                 key={c.key}
                 type="button"
                 onClick={() => setSelected(c.key)}
                 className={cn(
-                  "relative aspect-square rounded-xl border text-sm font-medium transition-colors",
+                  "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1 text-xs font-medium transition-colors",
                   isSelected
                     ? "border-accent bg-accent text-accent-foreground"
                     : "border-border bg-card text-foreground/85",
                   isToday && !isSelected && "ring-1 ring-accent/60",
                 )}
               >
-                <span>{c.day}</span>
-                {data && (
-                  <span className="absolute inset-x-1.5 bottom-1 flex justify-center gap-0.5">
-                    {data.focus > 0 && <span className="h-1 w-1 rounded-full bg-focus" />}
-                    {data.distraction > 0 && <span className="h-1 w-1 rounded-full bg-distraction" />}
-                    {data.neutral > 0 && <span className="h-1 w-1 rounded-full bg-neutral" />}
-                  </span>
+                <span className="text-[13px] leading-none">{c.day}</span>
+                {data ? (
+                  <>
+                    <span className={cn(
+                      "mt-0.5 text-[9px] tabular-nums leading-none",
+                      isSelected ? "opacity-90" : "text-muted-foreground",
+                    )}>
+                      {focusH >= 1 ? `${focusH.toFixed(1)}h` : `${Math.round(data.focus / 60000)}m`}
+                    </span>
+                    <div className="absolute inset-x-1 bottom-1 h-1 overflow-hidden rounded-full bg-background/40">
+                      <div className="flex h-full">
+                        <div className="h-full bg-focus" style={{ width: `${focusPct}%` }} />
+                        <div className="h-full bg-distraction" style={{ width: `${distPct}%` }} />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <span className="absolute inset-x-1 bottom-1 h-1 rounded-full bg-background/30 opacity-40" />
                 )}
               </button>
             );
           })}
+        </div>
+        <div className="mt-2 flex justify-end gap-3 text-[10px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-focus" /> Focus</span>
+          <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-distraction" /> Distraction</span>
         </div>
       </div>
 
@@ -115,13 +136,19 @@ function HistoryScreen() {
             {new Date(selected + "T00:00:00").toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}
           </h2>
           {summary && (
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span className="text-xs tabular-nums">
               <span className="text-focus">{fmtDuration(summary.focus)}</span>
-              {" · "}
+              <span className="text-muted-foreground"> · </span>
               <span className="text-distraction">{fmtDuration(summary.distraction)}</span>
             </span>
           )}
         </div>
+
+        <div>
+          <div className="mb-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Day timeline</div>
+          <HourGantt blocks={dayBlocks} dayStart={selectedDayStart} />
+        </div>
+
         <Timeline blocks={dayBlocks} emptyLabel="Nothing logged on this day." />
       </div>
     </div>
