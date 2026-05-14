@@ -11,6 +11,7 @@ import {
 import { storage, type ActiveState } from "./storage";
 import { BREAK_CATEGORY_ID, type Category, type CategoryType, type TimeBlock } from "./types";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/lib/auth-context";
 
 interface FocusLogContextValue {
