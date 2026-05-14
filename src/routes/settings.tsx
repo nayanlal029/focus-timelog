@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Download, Moon, Pencil, Sun, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, Moon, Pencil, Sun, Trash2, Upload } from "lucide-react";
+import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
