@@ -111,8 +111,16 @@ function SettingsScreen() {
           </Button>
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          {blocks.length} entries stored locally on this device.
+          {blocks.length} entries synced to your account.
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-semibold">Account</h2>
+        <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+        <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
+          <LogOut className="h-4 w-4" /> Sign out
+        </Button>
       </section>
 
       <CategoryDialog open={newCatOpen} onOpenChange={setNewCatOpen} />
