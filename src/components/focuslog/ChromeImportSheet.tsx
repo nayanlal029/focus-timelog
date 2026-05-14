@@ -88,20 +88,11 @@ export function ChromeImportSheet({ open, onOpenChange }: { open: boolean; onOpe
             {filename && <p className="mt-1 text-[11px] text-muted-foreground"><FileJson className="mr-1 inline h-3 w-3" />{filename}</p>}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label htmlFor="gap" className="text-[11px] uppercase tracking-wider text-muted-foreground">Gap (min)</Label>
-              <Input id="gap" type="number" min={1} max={60} value={gap} onChange={(e) => setGap(Math.max(1, Number(e.target.value) || 5))} onBlur={recompute} />
-            </div>
-            <div>
-              <Label htmlFor="hist-from" className="text-[11px] uppercase tracking-wider text-muted-foreground">From</Label>
-              <Input id="hist-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} onBlur={recompute} />
-            </div>
-            <div>
-              <Label htmlFor="hist-to" className="text-[11px] uppercase tracking-wider text-muted-foreground">To</Label>
-              <Input id="hist-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} onBlur={recompute} />
-            </div>
-          </div>
+          {plan && (
+            <p className="text-[11px] text-muted-foreground">
+              Segment gap is computed automatically from your browsing pattern.
+            </p>
+          )}
 
           {parsing && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
