@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { storage, type ActiveState } from "./storage";
+import { storage, DEFAULT_CATEGORIES, type ActiveState } from "./storage";
 import { BREAK_CATEGORY_ID, type Category, type CategoryType, type TimeBlock } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
@@ -124,22 +124,20 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       let catList = (cats ?? []).map(categoryFromRow);
       let blockList = (blks ?? []).map(blockFromRow);
 
-      // First-run: seed defaults from local storage if empty
+      // First-run: seed defaults from local storage if empty, else seed sample defaults
       if (catList.length === 0) {
         const localCats = storage.loadCategories();
         const localBlocks = storage.loadBlocks();
-        if (localCats.length) {
-          const catRows = localCats.map((c) => ({
-            id: c.id, user_id: user.id, name: c.name, type: c.type,
-            order: c.order, builtin: c.builtin ?? false,
-          }));
-          await supabase.from("categories").insert(catRows);
-          catList = localCats;
-        }
+        const seedCats = localCats.length ? localCats : DEFAULT_CATEGORIES;
+        const catRows = seedCats.map((c) => ({
+          id: c.id, user_id: user.id, name: c.name, type: c.type,
+          order: c.order, builtin: c.builtin ?? false,
+        }));
+        await supabase.from("categories").insert(catRows);
+        catList = seedCats;
         if (localBlocks.length) {
           const validIds = new Set(catList.map((c) => c.id));
           validIds.add(BREAK_CATEGORY_ID);
-          // Need a category row for break too
           if (!catList.find((c) => c.id === BREAK_CATEGORY_ID)) {
             await supabase.from("categories").insert({
               id: BREAK_CATEGORY_ID, user_id: user.id, name: "Break", type: "neutral", order: 999, builtin: true,
@@ -422,10 +420,14 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
 
   const addManyPastBlocks = useCallback((inputs: { categoryId: string; start: number; end: number; note?: string; link?: string }[]) => {
     const catMap = new Map(categories.map((c) => [c.id, c]));
+    const seen = new Set(blocks.map((b) => `${b.categoryId}|${b.start}|${b.end}`));
     const created: TimeBlock[] = [];
     for (const i of inputs) {
       const cat = catMap.get(i.categoryId);
       if (!cat || i.end <= i.start) continue;
+      const key = `${i.categoryId}|${i.start}|${i.end}`;
+      if (seen.has(key)) continue; // skip exact duplicate
+      seen.add(key);
       created.push({
         id: uid("p"), categoryId: cat.id, categoryName: cat.name, type: cat.type,
         start: i.start, end: i.end,
@@ -437,7 +439,7 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       dbInsertBlocks(created);
     }
     return created.length;
-  }, [categories]);
+  }, [categories, blocks]);
 
   const updateBlock = useCallback((id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note" | "link">>) => {
     let appliedPatch: Partial<TimeBlock> = patch;

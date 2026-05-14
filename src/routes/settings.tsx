@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Download, Moon, Pencil, Sun, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, LogOut, Moon, Pencil, Sun, Trash2, Upload } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsScreen() {
   const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData } = useFocusLog();
+  const { user, signOut } = useAuth();
   const [editing, setEditing] = useState<Category | null>(null);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -109,8 +111,16 @@ function SettingsScreen() {
           </Button>
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          {blocks.length} entries stored locally on this device.
+          {blocks.length} entries synced to your account.
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-semibold">Account</h2>
+        <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+        <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
+          <LogOut className="h-4 w-4" /> Sign out
+        </Button>
       </section>
 
       <CategoryDialog open={newCatOpen} onOpenChange={setNewCatOpen} />

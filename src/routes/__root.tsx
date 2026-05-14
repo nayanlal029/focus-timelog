@@ -95,14 +95,28 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <FocusLogProvider>
-          <FilterProvider>
-            <AppShell>
-              <Outlet />
-            </AppShell>
-          </FilterProvider>
-        </FocusLogProvider>
+        <AuthGate>
+          <FocusLogProvider>
+            <FilterProvider>
+              <AppShell>
+                <Outlet />
+              </AppShell>
+            </FilterProvider>
+          </FocusLogProvider>
+        </AuthGate>
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+import { useAuth } from "@/lib/auth-context";
+import { LoginScreen } from "@/components/auth/LoginScreen";
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { user, ready } = useAuth();
+  if (!ready) {
+    return <div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
+  }
+  if (!user) return <LoginScreen />;
+  return <>{children}</>;
 }

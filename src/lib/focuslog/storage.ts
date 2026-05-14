@@ -7,16 +7,14 @@ const KEYS = {
   active: "focuslog.active.v1",
 };
 
-const DEFAULT_CATEGORIES: Category[] = [
+export const DEFAULT_CATEGORIES: Category[] = [
   { id: "c-work", name: "Work", type: "focus", order: 0, builtin: true },
-  { id: "c-meeting", name: "Meeting", type: "focus", order: 1, builtin: true },
-  { id: "c-study-product", name: "Study-Product", type: "focus", order: 2, builtin: true },
-  { id: "c-study-gre", name: "Study-GRE", type: "focus", order: 3, builtin: true },
-  { id: "c-pe", name: "PE-Gym/Cult", type: "focus", order: 4, builtin: true },
-  { id: "c-sleep", name: "Sleep", type: "focus", order: 5, builtin: true },
-  { id: "c-instagram", name: "Instagram", type: "distraction", order: 6, builtin: true },
-  { id: "c-meal", name: "Meal", type: "neutral", order: 7, builtin: true },
-  { id: "c-transit", name: "Transit", type: "neutral", order: 8, builtin: true },
+  { id: "c-work-meet", name: "Work-Meet", type: "focus", order: 1, builtin: true },
+  { id: "c-study", name: "Study", type: "focus", order: 2, builtin: true },
+  { id: "c-study-product", name: "Study-Product", type: "focus", order: 3, builtin: true },
+  { id: "c-gym", name: "Gym", type: "focus", order: 4, builtin: true },
+  { id: "c-podcast", name: "Podcast", type: "neutral", order: 5, builtin: true },
+  { id: "c-social-insta", name: "Social-Insta", type: "distraction", order: 6, builtin: true },
 ];
 
 function safeRead<T>(key: string, fallback: T): T {
