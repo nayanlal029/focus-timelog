@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { FocusLogProvider } from "@/lib/focuslog/context";
 import { FilterProvider } from "@/lib/focuslog/filter-context";
 import { AppShell } from "@/components/focuslog/AppShell";
+import { AuthProvider } from "@/lib/auth-context";
 
 function NotFoundComponent() {
   return (
@@ -93,13 +94,15 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <FocusLogProvider>
-        <FilterProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-        </FilterProvider>
-      </FocusLogProvider>
+      <AuthProvider>
+        <FocusLogProvider>
+          <FilterProvider>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+          </FilterProvider>
+        </FocusLogProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
