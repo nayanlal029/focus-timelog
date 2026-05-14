@@ -96,7 +96,20 @@ function HistoryScreen() {
   return (
     <div className="flex flex-col gap-6 px-4 pt-6">
       <header>
-        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">History</div>
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">History</div>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              filterOpen ? "border-accent bg-accent text-accent-foreground" : "border-border bg-card text-muted-foreground",
+            )}
+          >
+            {filterOpen ? <X className="h-3.5 w-3.5" /> : <Filter className="h-3.5 w-3.5" />}
+            {filterOpen ? "Close" : "Filter & Export"}
+          </button>
+        </div>
         <div className="mt-1 flex items-center justify-between">
           <button
             type="button"
@@ -117,6 +130,57 @@ function HistoryScreen() {
           </button>
         </div>
       </header>
+
+      {filterOpen && (
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="from-date" className="text-[11px] uppercase tracking-wider text-muted-foreground">From</Label>
+              <Input id="from-date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <Input aria-label="From time" type="time" value={fromTime} onChange={(e) => setFromTime(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="to-date" className="text-[11px] uppercase tracking-wider text-muted-foreground">To</Label>
+              <Input id="to-date" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <Input aria-label="To time" type="time" value={toTime} onChange={(e) => setToTime(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: "Today", days: 0 },
+              { label: "7d", days: 6 },
+              { label: "30d", days: 29 },
+              { label: "90d", days: 89 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => {
+                  setFrom(toInputDate(today.getTime() - p.days * 86400000));
+                  setTo(toInputDate(today.getTime()));
+                  setFromTime("00:00");
+                  setToTime("23:59");
+                }}
+                className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
+            <div className="tabular-nums">
+              <span className="text-muted-foreground">{filteredBlocks.length} entries · </span>
+              <span className="text-focus">{fmtDuration(filteredTotals.focus)}</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-distraction">{fmtDuration(filteredTotals.distraction)}</span>
+            </div>
+            <Button size="sm" onClick={downloadFiltered} disabled={!filterRange || filteredBlocks.length === 0}>
+              <Download className="h-4 w-4" /> Download .xlsx
+            </Button>
+          </div>
+        </section>
+      )}
+
 
       <div>
         <div className="grid grid-cols-7 gap-1 pb-2 text-center text-[10px] uppercase tracking-wider text-muted-foreground">
