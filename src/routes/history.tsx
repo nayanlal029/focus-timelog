@@ -1,11 +1,20 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Filter, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
-import { dayKey, fmtDuration } from "@/lib/focuslog/format";
+import { dayKey, fmtDuration, startOfDay, endOfDay } from "@/lib/focuslog/format";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { HourGantt } from "@/components/focuslog/HourGantt";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { exportBlocksToXlsx } from "@/lib/focuslog/export";
 import { cn } from "@/lib/utils";
+
+function toInputDate(ts: number) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export const Route = createFileRoute("/history")({
   head: () => ({ meta: [{ title: "FocusLog — History" }] }),
