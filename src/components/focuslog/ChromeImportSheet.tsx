@@ -87,7 +87,7 @@ export function ChromeImportSheet({ open, onOpenChange }: { open: boolean; onOpe
         <SheetHeader className="text-left">
           <SheetTitle>Import Chrome History</SheetTitle>
           <SheetDescription>
-            Upload <code className="text-xs">History.json</code> from Google Takeout. Visits are grouped into segments and matched to your categories.
+            Upload a Chrome history JSON — Google Takeout <code className="text-xs">History.json</code> or a flat array export (e.g. Quick Chrome History Export). Visits are grouped into segments and matched to your categories.
           </SheetDescription>
         </SheetHeader>
 
