@@ -27,6 +27,7 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsScreen() {
   const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData } = useFocusLog();
+  const { user, signOut } = useAuth();
   const [editing, setEditing] = useState<Category | null>(null);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
