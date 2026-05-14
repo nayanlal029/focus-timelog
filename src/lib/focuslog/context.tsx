@@ -420,10 +420,14 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
 
   const addManyPastBlocks = useCallback((inputs: { categoryId: string; start: number; end: number; note?: string; link?: string }[]) => {
     const catMap = new Map(categories.map((c) => [c.id, c]));
+    const seen = new Set(blocks.map((b) => `${b.categoryId}|${b.start}|${b.end}`));
     const created: TimeBlock[] = [];
     for (const i of inputs) {
       const cat = catMap.get(i.categoryId);
       if (!cat || i.end <= i.start) continue;
+      const key = `${i.categoryId}|${i.start}|${i.end}`;
+      if (seen.has(key)) continue; // skip exact duplicate
+      seen.add(key);
       created.push({
         id: uid("p"), categoryId: cat.id, categoryName: cat.name, type: cat.type,
         start: i.start, end: i.end,
@@ -435,7 +439,7 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       dbInsertBlocks(created);
     }
     return created.length;
-  }, [categories]);
+  }, [categories, blocks]);
 
   const updateBlock = useCallback((id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note" | "link">>) => {
     let appliedPatch: Partial<TimeBlock> = patch;
