@@ -16,9 +16,6 @@ export function ChromeImportSheet({ open, onOpenChange }: { open: boolean; onOpe
   const [parsing, setParsing] = useState(false);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [filename, setFilename] = useState<string>("");
-  const [gap, setGap] = useState(5);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const rawRef = useRef<unknown>(null);
 
@@ -31,29 +28,15 @@ export function ChromeImportSheet({ open, onOpenChange }: { open: boolean; onOpe
       const json = JSON.parse(text);
       rawRef.current = json;
       setFilename(file.name);
-      const p = buildImportPlan(json, categories, {
-        gapMinutes: gap,
-        fromMs: from ? new Date(from + "T00:00:00").getTime() : undefined,
-        toMs: to ? new Date(to + "T23:59:59").getTime() : undefined,
-      });
+      const p = buildImportPlan(json, categories);
       setPlan(p);
       if (p.totalVisits === 0) toast.warning("No visits found in this file.");
     } catch (e) {
       console.error(e);
-      toast.error("Could not read this file. Expected Chrome History.json from Google Takeout.");
+      toast.error("Could not read this file. Expected a Chrome history JSON export.");
     } finally {
       setParsing(false);
     }
-  };
-
-  const recompute = () => {
-    if (!rawRef.current) return;
-    const p = buildImportPlan(rawRef.current, categories, {
-      gapMinutes: gap,
-      fromMs: from ? new Date(from + "T00:00:00").getTime() : undefined,
-      toMs: to ? new Date(to + "T23:59:59").getTime() : undefined,
-    });
-    setPlan(p);
   };
 
   const doImport = () => {
