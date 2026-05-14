@@ -1,7 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { Filter, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
-import { dayKey, fmtDuration, startOfDay } from "@/lib/focuslog/format";
+import { useFilter } from "@/lib/focuslog/filter-context";
+import { dayKey, fmtDuration } from "@/lib/focuslog/format";
+import { FilterPanel } from "@/components/focuslog/FilterPanel";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "FocusLog — Dashboard" }] }),
@@ -10,77 +14,115 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardScreen() {
   const { blocks } = useFocusLog();
-  const today = startOfDay(Date.now());
+  const { range, from, to } = useFilter();
+  const [filterOpen, setFilterOpen] = useState(false);
 
-  const todayBlocks = blocks.filter((b) => dayKey(b.start) === dayKey(today));
-  const todayTotals = sumByType(todayBlocks);
+  const filtered = useMemo(() => {
+    if (!range) return [];
+    return blocks.filter((b) => b.start >= range.start && b.start <= range.end);
+  }, [blocks, range]);
 
-  const week = useMemo(() => {
-    const days: { label: string; key: string; focus: number; distraction: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today); d.setDate(d.getDate() - i);
+  const totals = useMemo(() => sumByType(filtered), [filtered]);
+
+  // bucket per day across selected range
+  const days = useMemo(() => {
+    if (!range) return [];
+    const out: { label: string; key: string; focus: number; distraction: number; neutral: number }[] = [];
+    const start = new Date(range.start); start.setHours(0, 0, 0, 0);
+    const end = new Date(range.end); end.setHours(0, 0, 0, 0);
+    const oneDay = 86400000;
+    const dayCount = Math.min(60, Math.floor((end.getTime() - start.getTime()) / oneDay) + 1);
+    for (let i = 0; i < dayCount; i++) {
+      const d = new Date(start.getTime() + i * oneDay);
       const k = dayKey(d.getTime());
-      const dayBlocks = blocks.filter((b) => dayKey(b.start) === k);
+      const dayBlocks = filtered.filter((b) => dayKey(b.start) === k);
       const t = sumByType(dayBlocks);
-      days.push({
-        label: d.toLocaleDateString([], { weekday: "narrow" }),
+      out.push({
+        label: dayCount <= 14
+          ? d.toLocaleDateString([], { weekday: "narrow" })
+          : String(d.getDate()),
         key: k,
         focus: t.focus,
         distraction: t.distraction,
+        neutral: t.neutral,
       });
     }
-    return days;
-  }, [blocks, today]);
+    return out;
+  }, [range, filtered]);
 
-  const maxBar = Math.max(1, ...week.map((d) => Math.max(d.focus, d.distraction)));
+  const maxBar = Math.max(1, ...days.map((d) => Math.max(d.focus, d.distraction)));
 
-  const last7 = blocks.filter((b) => b.start >= today - 6 * 24 * 3600 * 1000);
-  const topFocus = topByCategory(last7.filter((b) => b.type === "focus")).slice(0, 3);
-  const topDistr = topByCategory(last7.filter((b) => b.type === "distraction")).slice(0, 3);
+  const topFocus = topByCategory(filtered.filter((b) => b.type === "focus")).slice(0, 5);
+  const topDistr = topByCategory(filtered.filter((b) => b.type === "distraction")).slice(0, 5);
+
+  const sessionCount = filtered.length;
+  const totalMs = totals.focus + totals.distraction + totals.neutral;
+  const focusPct = totalMs > 0 ? Math.round((totals.focus / totalMs) * 100) : 0;
+  const avgSessionMs = sessionCount > 0 ? Math.round(totalMs / sessionCount) : 0;
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-6">
       <header>
-        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Dashboard</div>
-        <h1 className="mt-1 text-2xl font-semibold">Today's totals</h1>
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Dashboard</div>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              filterOpen ? "border-accent bg-accent text-accent-foreground" : "border-border bg-card text-muted-foreground",
+            )}
+          >
+            {filterOpen ? <X className="h-3.5 w-3.5" /> : <Filter className="h-3.5 w-3.5" />}
+            {filterOpen ? "Close" : "Filter"}
+          </button>
+        </div>
+        <h1 className="mt-1 text-2xl font-semibold">Totals</h1>
+        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">{from} → {to}</p>
       </header>
 
+      {filterOpen && <FilterPanel />}
+
       <div className="grid grid-cols-3 gap-2">
-        <StatCard label="Focus" value={todayTotals.focus} tone="focus" />
-        <StatCard label="Distraction" value={todayTotals.distraction} tone="distraction" />
-        <StatCard label="Neutral" value={todayTotals.neutral} tone="neutral" />
+        <StatCard label="Focus" value={totals.focus} tone="focus" />
+        <StatCard label="Distraction" value={totals.distraction} tone="distraction" />
+        <StatCard label="Neutral" value={totals.neutral} tone="neutral" />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat label="Sessions" value={String(sessionCount)} />
+        <MiniStat label="Focus %" value={`${focusPct}%`} />
+        <MiniStat label="Avg session" value={fmtDuration(avgSessionMs)} />
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Last 7 days</h2>
+          <h2 className="text-sm font-semibold">Range breakdown</h2>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-focus" /> Focus</span>
             <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-distraction" /> Distraction</span>
           </div>
         </div>
-        <div className="flex h-40 items-end justify-between gap-1.5">
-          {week.map((d) => (
-            <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
-              <div className="flex h-32 w-full items-end gap-0.5">
-                <div
-                  className="flex-1 rounded-t-md bg-focus/80"
-                  style={{ height: `${(d.focus / maxBar) * 100}%` }}
-                />
-                <div
-                  className="flex-1 rounded-t-md bg-distraction/80"
-                  style={{ height: `${(d.distraction / maxBar) * 100}%` }}
-                />
+        {days.length === 0 ? (
+          <div className="py-8 text-center text-xs text-muted-foreground">Pick a date range to see a breakdown.</div>
+        ) : (
+          <div className="flex h-40 items-end justify-between gap-1">
+            {days.map((d) => (
+              <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
+                <div className="flex h-32 w-full items-end gap-0.5">
+                  <div className="flex-1 rounded-t-md bg-focus/80" style={{ height: `${(d.focus / maxBar) * 100}%` }} />
+                  <div className="flex-1 rounded-t-md bg-distraction/80" style={{ height: `${(d.distraction / maxBar) * 100}%` }} />
+                </div>
+                <div className="text-[10px] text-muted-foreground">{d.label}</div>
               </div>
-              <div className="text-[10px] text-muted-foreground">{d.label}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-3">
-        <TopList title="Top Focus (7d)" items={topFocus} tone="focus" />
-        <TopList title="Top Distraction (7d)" items={topDistr} tone="distraction" />
+        <TopList title="Top Focus" items={topFocus} tone="focus" />
+        <TopList title="Top Distraction" items={topDistr} tone="distraction" />
       </section>
     </div>
   );
@@ -113,13 +155,22 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
   );
 }
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-3">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
 function TopList({ title, items, tone }: { title: string; items: { name: string; ms: number }[]; tone: "focus" | "distraction" }) {
   const dot = tone === "focus" ? "bg-focus" : "bg-distraction";
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <h3 className="mb-2 text-sm font-semibold">{title}</h3>
       {items.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No data yet.</div>
+        <div className="text-xs text-muted-foreground">No data in range.</div>
       ) : (
         <ul className="space-y-2">
           {items.map((it, i) => (

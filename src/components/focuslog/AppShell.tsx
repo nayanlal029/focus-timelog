@@ -3,9 +3,9 @@ import { Clock, BarChart3, Calendar, Settings as SettingsIcon } from "lucide-rea
 import type { ReactNode } from "react";
 
 const tabs = [
-  { to: "/", label: "Today", icon: Clock, exact: true },
-  { to: "/history", label: "History", icon: Calendar, exact: false },
+  { to: "/", label: "Timer", icon: Clock, exact: true },
   { to: "/dashboard", label: "Dashboard", icon: BarChart3, exact: false },
+  { to: "/history", label: "History", icon: Calendar, exact: false },
   { to: "/settings", label: "Settings", icon: SettingsIcon, exact: false },
 ] as const;
 

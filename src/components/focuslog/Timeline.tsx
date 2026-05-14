@@ -7,12 +7,19 @@ import { typePillClasses } from "./typeStyles";
 import { cn } from "@/lib/utils";
 import { EditBlockSheet } from "./Sheets";
 
-export function Timeline({ blocks, emptyLabel = "No activity logged yet." }: { blocks: TimeBlock[]; emptyLabel?: string }) {
+const PAGE_SIZE = 20;
+
+export function Timeline({ blocks, emptyLabel = "No activity logged yet.", pageSize = PAGE_SIZE }: { blocks: TimeBlock[]; emptyLabel?: string; pageSize?: number }) {
   const { deleteBlock } = useFocusLog();
   const [editing, setEditing] = useState<TimeBlock | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [visibleCount, setVisibleCount] = useState(pageSize);
   const sorted = [...blocks].sort((a, b) => b.start - a.start);
+  const visible = sorted.slice(0, visibleCount);
+
+  // reset pagination when blocks list identity/length changes
+  useEffect(() => { setVisibleCount(pageSize); }, [blocks, pageSize]);
 
   // exit select mode when no items
   useEffect(() => { if (sorted.length === 0 && selectMode) setSelectMode(false); }, [sorted.length, selectMode]);
@@ -80,7 +87,7 @@ export function Timeline({ blocks, emptyLabel = "No activity logged yet." }: { b
       </div>
 
       <ul className="space-y-2">
-        {sorted.map((b) => {
+        {visible.map((b) => {
           const dur = b.end - b.start;
           const isSel = selected.has(b.id);
           return (
@@ -118,6 +125,20 @@ export function Timeline({ blocks, emptyLabel = "No activity logged yet." }: { b
           );
         })}
       </ul>
+      {sorted.length > visibleCount && (
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <span className="text-muted-foreground tabular-nums">
+            Showing {visible.length} of {sorted.length}
+          </span>
+          <button
+            type="button"
+            onClick={() => setVisibleCount((c) => c + pageSize)}
+            className="rounded-full border border-border bg-card px-3 py-1.5 font-medium text-foreground"
+          >
+            Load more
+          </button>
+        </div>
+      )}
       <EditBlockSheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} block={editing} />
     </>
   );
