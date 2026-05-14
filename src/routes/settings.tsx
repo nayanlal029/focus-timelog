@@ -98,6 +98,9 @@ function SettingsScreen() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold">Data</h2>
         <div className="flex flex-col gap-2">
+          <Button variant="outline" className="justify-start" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" /> Import Chrome History
+          </Button>
           <Button variant="outline" className="justify-start" onClick={() => setExportOpen(true)}>
             <Download className="h-4 w-4" /> Export to Excel
           </Button>
@@ -117,6 +120,7 @@ function SettingsScreen() {
         initial={editing ? { id: editing.id, name: editing.name, type: editing.type } : undefined}
       />
       <ExportSheet open={exportOpen} onOpenChange={setExportOpen} />
+      <ChromeImportSheet open={importOpen} onOpenChange={setImportOpen} />
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent className="max-w-[92vw] rounded-2xl">
