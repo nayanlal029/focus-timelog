@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Play, Square } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -19,9 +19,11 @@ export function BreakPopup({ open, onResume, onStop }: Props) {
   return (
     <Dialog open={open}>
       <DialogContent
-        showCloseButton={false}
-        className="flex h-dvh max-h-dvh w-full max-w-md flex-col items-center justify-between gap-0 rounded-none border-0 bg-background p-0 sm:rounded-none"
+        className="flex h-dvh max-h-dvh w-full max-w-md flex-col items-center justify-between gap-0 rounded-none border-0 bg-background p-0 sm:rounded-none [&>button.absolute]:hidden"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
       >
+        <DialogTitle className="sr-only">Break — {cat?.name ?? "Activity"} paused</DialogTitle>
         <div className="w-full px-6 pt-12 text-center">
           <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Paused</div>
           <div className="mt-1 text-2xl font-semibold">{cat?.name ?? "Activity"}</div>
