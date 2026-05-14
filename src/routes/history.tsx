@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Download, Filter, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
-import { dayKey, fmtDuration, startOfDay, endOfDay } from "@/lib/focuslog/format";
+import { dayKey, fmtDuration } from "@/lib/focuslog/format";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { HourGantt } from "@/components/focuslog/HourGantt";
 import { Button } from "@/components/ui/button";
