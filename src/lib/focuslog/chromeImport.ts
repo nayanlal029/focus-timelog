@@ -82,11 +82,19 @@ export interface ImportPlan {
 }
 
 export interface ImportOptions {
-  gapMinutes?: number; // gap that ends a segment
   defaultDurationSec?: number; // duration assigned to a single isolated visit
   maxVisitDurationMin?: number; // cap for time between visits within a segment
-  fromMs?: number;
-  toMs?: number;
+}
+
+// Auto-pick a gap threshold from the data: ~4× the median inter-visit gap,
+// clamped to [2 min, 15 min]. Falls back to 5 min when too few samples.
+function autoGapMs(sortedMs: number[]): number {
+  if (sortedMs.length < 4) return 5 * 60_000;
+  const gaps: number[] = [];
+  for (let i = 1; i < sortedMs.length; i++) gaps.push(sortedMs[i] - sortedMs[i - 1]);
+  gaps.sort((a, b) => a - b);
+  const median = gaps[Math.floor(gaps.length / 2)] || 60_000;
+  return Math.min(15 * 60_000, Math.max(2 * 60_000, median * 4));
 }
 
 export function buildImportPlan(
@@ -94,7 +102,6 @@ export function buildImportPlan(
   categories: Category[],
   opts: ImportOptions = {},
 ): ImportPlan {
-  const gapMs = (opts.gapMinutes ?? 5) * 60_000;
   const defaultDur = (opts.defaultDurationSec ?? 60) * 1000;
   const maxVisitMs = (opts.maxVisitDurationMin ?? 10) * 60_000;
 
@@ -102,8 +109,9 @@ export function buildImportPlan(
   const visits = all
     .map((v) => ({ ...v, ms: visitMs(v) }))
     .filter((v): v is ChromeVisit & { ms: number } => v.ms !== null)
-    .filter((v) => (!opts.fromMs || v.ms >= opts.fromMs) && (!opts.toMs || v.ms <= opts.toMs))
     .sort((a, b) => a.ms - b.ms);
+
+  const gapMs = autoGapMs(visits.map((v) => v.ms));
 
   const segments: ImportSegment[] = [];
   const unmatched = new Set<string>();
