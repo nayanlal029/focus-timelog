@@ -30,6 +30,7 @@ function SettingsScreen() {
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const move = (idx: number, dir: -1 | 1) => {
     const ids = categories.map((c) => c.id);
