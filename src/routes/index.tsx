@@ -1,6 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AppShell } from "@/components/focuslog/AppShell";
-import { FocusLogProvider } from "@/lib/focuslog/context";
 import { TodayScreen } from "@/components/focuslog/TodayScreen";
 
 export const Route = createFileRoute("/")({
@@ -10,15 +8,5 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Log focus vs distraction time as a continuous timeline." },
     ],
   }),
-  component: Index,
+  component: TodayScreen,
 });
-
-function Index() {
-  return (
-    <FocusLogProvider>
-      <AppShell>
-        <TodayScreen />
-      </AppShell>
-    </FocusLogProvider>
-  );
-}
