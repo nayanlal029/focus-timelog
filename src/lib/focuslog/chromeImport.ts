@@ -3,11 +3,29 @@ import type { Category, CategoryType } from "./types";
 interface ChromeVisit {
   url: string;
   title?: string;
-  time_usec: number;
+  time_usec?: number; // Google Takeout (microseconds)
+  visitTime?: number; // Quick Chrome History Export (milliseconds)
 }
 
-interface ChromeHistoryFile {
-  "Browser History"?: ChromeVisit[];
+type ChromeHistoryFile =
+  | { "Browser History"?: ChromeVisit[] }
+  | ChromeVisit[];
+
+function extractVisits(raw: unknown): ChromeVisit[] {
+  if (Array.isArray(raw)) return raw as ChromeVisit[];
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj["Browser History"])) return obj["Browser History"] as ChromeVisit[];
+    // Some exports nest under other keys; try first array property
+    for (const v of Object.values(obj)) if (Array.isArray(v)) return v as ChromeVisit[];
+  }
+  return [];
+}
+
+function visitMs(v: ChromeVisit): number | null {
+  if (typeof v.visitTime === "number" && isFinite(v.visitTime)) return Math.floor(v.visitTime);
+  if (typeof v.time_usec === "number" && isFinite(v.time_usec)) return Math.floor(v.time_usec / 1000);
+  return null;
 }
 
 // Hostname keyword → suggested category name + type fallback
