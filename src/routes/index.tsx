@@ -4,7 +4,7 @@ import { TodayScreen } from "@/components/focuslog/TodayScreen";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "FocusLog — Today" },
+      { title: "FocusLog — Timer" },
       { name: "description", content: "Log focus vs distraction time as a continuous timeline." },
     ],
   }),

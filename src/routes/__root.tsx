@@ -10,6 +10,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { FocusLogProvider } from "@/lib/focuslog/context";
+import { FilterProvider } from "@/lib/focuslog/filter-context";
 import { AppShell } from "@/components/focuslog/AppShell";
 
 function NotFoundComponent() {
@@ -93,9 +94,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <FocusLogProvider>
-        <AppShell>
-          <Outlet />
-        </AppShell>
+        <FilterProvider>
+          <AppShell>
+            <Outlet />
+          </AppShell>
+        </FilterProvider>
       </FocusLogProvider>
     </QueryClientProvider>
   );
