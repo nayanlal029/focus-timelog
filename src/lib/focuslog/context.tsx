@@ -124,22 +124,20 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       let catList = (cats ?? []).map(categoryFromRow);
       let blockList = (blks ?? []).map(blockFromRow);
 
-      // First-run: seed defaults from local storage if empty
+      // First-run: seed defaults from local storage if empty, else seed sample defaults
       if (catList.length === 0) {
         const localCats = storage.loadCategories();
         const localBlocks = storage.loadBlocks();
-        if (localCats.length) {
-          const catRows = localCats.map((c) => ({
-            id: c.id, user_id: user.id, name: c.name, type: c.type,
-            order: c.order, builtin: c.builtin ?? false,
-          }));
-          await supabase.from("categories").insert(catRows);
-          catList = localCats;
-        }
+        const seedCats = localCats.length ? localCats : DEFAULT_CATEGORIES;
+        const catRows = seedCats.map((c) => ({
+          id: c.id, user_id: user.id, name: c.name, type: c.type,
+          order: c.order, builtin: c.builtin ?? false,
+        }));
+        await supabase.from("categories").insert(catRows);
+        catList = seedCats;
         if (localBlocks.length) {
           const validIds = new Set(catList.map((c) => c.id));
           validIds.add(BREAK_CATEGORY_ID);
-          // Need a category row for break too
           if (!catList.find((c) => c.id === BREAK_CATEGORY_ID)) {
             await supabase.from("categories").insert({
               id: BREAK_CATEGORY_ID, user_id: user.id, name: "Break", type: "neutral", order: 999, builtin: true,
