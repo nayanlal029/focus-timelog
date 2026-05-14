@@ -1,20 +1,16 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Download, Filter, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
+import { useFilter } from "@/lib/focuslog/filter-context";
 import { dayKey, fmtDuration } from "@/lib/focuslog/format";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { HourGantt } from "@/components/focuslog/HourGantt";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { exportBlocksToXlsx } from "@/lib/focuslog/export";
+import { FilterPanel } from "@/components/focuslog/FilterPanel";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-
-function toInputDate(ts: number) {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export const Route = createFileRoute("/history")({
   head: () => ({ meta: [{ title: "FocusLog — History" }] }),
@@ -23,27 +19,17 @@ export const Route = createFileRoute("/history")({
 
 function HistoryScreen() {
   const { blocks } = useFocusLog();
+  const { range } = useFilter();
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState<string>(dayKey(today.getTime()));
   const [filterOpen, setFilterOpen] = useState(false);
-  const [from, setFrom] = useState<string>(toInputDate(today.getTime() - 6 * 86400000));
-  const [to, setTo] = useState<string>(toInputDate(today.getTime()));
-  const [fromTime, setFromTime] = useState<string>("00:00");
-  const [toTime, setToTime] = useState<string>("23:59");
-
-  const filterRange = useMemo(() => {
-    if (!from || !to) return null;
-    const start = new Date(`${from}T${fromTime || "00:00"}:00`).getTime();
-    const end = new Date(`${to}T${toTime || "23:59"}:59`).getTime();
-    if (isNaN(start) || isNaN(end) || end < start) return null;
-    return { start, end };
-  }, [from, to, fromTime, toTime]);
+  const [viewOpen, setViewOpen] = useState(false);
 
   const filteredBlocks = useMemo(() => {
-    if (!filterRange) return [];
-    return blocks.filter((b) => b.start >= filterRange.start && b.start <= filterRange.end);
-  }, [blocks, filterRange]);
+    if (!range) return [];
+    return blocks.filter((b) => b.start >= range.start && b.start <= range.end);
+  }, [blocks, range]);
 
   const filteredTotals = useMemo(() => {
     const t = { focus: 0, distraction: 0, neutral: 0 };
@@ -55,12 +41,6 @@ function HistoryScreen() {
     });
     return t;
   }, [filteredBlocks]);
-
-  const downloadFiltered = () => {
-    if (!filterRange || filteredBlocks.length === 0) return;
-    exportBlocksToXlsx(filteredBlocks, `focuslog-${from}_to_${to}.xlsx`);
-  };
-
 
   const monthLabel = cursor.toLocaleDateString([], { month: "long", year: "numeric" });
   const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -107,7 +87,7 @@ function HistoryScreen() {
             )}
           >
             {filterOpen ? <X className="h-3.5 w-3.5" /> : <Filter className="h-3.5 w-3.5" />}
-            {filterOpen ? "Close" : "Filter & Export"}
+            {filterOpen ? "Close" : "Filter"}
           </button>
         </div>
         <div className="mt-1 flex items-center justify-between">
@@ -131,56 +111,7 @@ function HistoryScreen() {
         </div>
       </header>
 
-      {filterOpen && (
-        <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="from-date" className="text-[11px] uppercase tracking-wider text-muted-foreground">From</Label>
-              <Input id="from-date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-              <Input aria-label="From time" type="time" value={fromTime} onChange={(e) => setFromTime(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="to-date" className="text-[11px] uppercase tracking-wider text-muted-foreground">To</Label>
-              <Input id="to-date" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-              <Input aria-label="To time" type="time" value={toTime} onChange={(e) => setToTime(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: "Today", days: 0 },
-              { label: "7d", days: 6 },
-              { label: "30d", days: 29 },
-              { label: "90d", days: 89 },
-            ].map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => {
-                  setFrom(toInputDate(today.getTime() - p.days * 86400000));
-                  setTo(toInputDate(today.getTime()));
-                  setFromTime("00:00");
-                  setToTime("23:59");
-                }}
-                className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
-            <div className="tabular-nums">
-              <span className="text-muted-foreground">{filteredBlocks.length} entries · </span>
-              <span className="text-focus">{fmtDuration(filteredTotals.focus)}</span>
-              <span className="text-muted-foreground"> · </span>
-              <span className="text-distraction">{fmtDuration(filteredTotals.distraction)}</span>
-            </div>
-            <Button size="sm" onClick={downloadFiltered} disabled={!filterRange || filteredBlocks.length === 0}>
-              <Download className="h-4 w-4" /> Download .xlsx
-            </Button>
-          </div>
-        </section>
-      )}
-
+      {filterOpen && <FilterPanel onView={() => setViewOpen(true)} />}
 
       <div>
         <div className="grid grid-cols-7 gap-1 pb-2 text-center text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -259,6 +190,23 @@ function HistoryScreen() {
 
         <Timeline blocks={dayBlocks} emptyLabel="Nothing logged on this day." />
       </div>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Filtered sessions</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-xs tabular-nums">
+            <div>
+              <span className="text-muted-foreground">{filteredBlocks.length} entries · </span>
+              <span className="text-focus">{fmtDuration(filteredTotals.focus)}</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-distraction">{fmtDuration(filteredTotals.distraction)}</span>
+            </div>
+            <Timeline blocks={filteredBlocks} emptyLabel="No sessions in this range." />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
