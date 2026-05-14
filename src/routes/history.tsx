@@ -26,6 +26,41 @@ function HistoryScreen() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState<string>(dayKey(today.getTime()));
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [from, setFrom] = useState<string>(toInputDate(today.getTime() - 6 * 86400000));
+  const [to, setTo] = useState<string>(toInputDate(today.getTime()));
+  const [fromTime, setFromTime] = useState<string>("00:00");
+  const [toTime, setToTime] = useState<string>("23:59");
+
+  const filterRange = useMemo(() => {
+    if (!from || !to) return null;
+    const start = new Date(`${from}T${fromTime || "00:00"}:00`).getTime();
+    const end = new Date(`${to}T${toTime || "23:59"}:59`).getTime();
+    if (isNaN(start) || isNaN(end) || end < start) return null;
+    return { start, end };
+  }, [from, to, fromTime, toTime]);
+
+  const filteredBlocks = useMemo(() => {
+    if (!filterRange) return [];
+    return blocks.filter((b) => b.start >= filterRange.start && b.start <= filterRange.end);
+  }, [blocks, filterRange]);
+
+  const filteredTotals = useMemo(() => {
+    const t = { focus: 0, distraction: 0, neutral: 0 };
+    filteredBlocks.forEach((b) => {
+      const d = b.end - b.start;
+      if (b.type === "focus") t.focus += d;
+      else if (b.type === "distraction") t.distraction += d;
+      else t.neutral += d;
+    });
+    return t;
+  }, [filteredBlocks]);
+
+  const downloadFiltered = () => {
+    if (!filterRange || filteredBlocks.length === 0) return;
+    exportBlocksToXlsx(filteredBlocks, `focuslog-${from}_to_${to}.xlsx`);
+  };
+
 
   const monthLabel = cursor.toLocaleDateString([], { month: "long", year: "numeric" });
   const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
