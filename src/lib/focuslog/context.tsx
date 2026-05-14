@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { storage, type ActiveState } from "./storage";
+import { storage, DEFAULT_CATEGORIES, type ActiveState } from "./storage";
 import { BREAK_CATEGORY_ID, type Category, type CategoryType, type TimeBlock } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
