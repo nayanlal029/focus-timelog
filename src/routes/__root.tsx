@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { FocusLogProvider } from "@/lib/focuslog/context";
 import { FilterProvider } from "@/lib/focuslog/filter-context";
 import { AppShell } from "@/components/focuslog/AppShell";
+import { AuthProvider } from "@/lib/auth-context";
 
 function NotFoundComponent() {
   return (
