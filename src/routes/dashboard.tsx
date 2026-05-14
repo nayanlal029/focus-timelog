@@ -86,11 +86,9 @@ function DashboardScreen() {
   );
 }
 
-function sumByType(bs: ReturnType<typeof Array.prototype.slice> extends infer R ? R : never): { focus: number; distraction: number; neutral: number } {
+function sumByType(bs: { type: "focus" | "distraction" | "neutral"; start: number; end: number }[]) {
   const out = { focus: 0, distraction: 0, neutral: 0 };
-  (bs as { type: "focus" | "distraction" | "neutral"; start: number; end: number }[]).forEach((b) => {
-    out[b.type] += b.end - b.start;
-  });
+  bs.forEach((b) => { out[b.type] += b.end - b.start; });
   return out;
 }
 
