@@ -16,6 +16,7 @@ export interface TimeBlock {
   start: number; // epoch ms
   end: number; // epoch ms
   note?: string;
+  link?: string; // optional URL (e.g. from imported browser history)
   isBreak?: boolean;
 }
 
