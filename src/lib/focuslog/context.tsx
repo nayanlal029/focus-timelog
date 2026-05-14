@@ -30,8 +30,9 @@ interface FocusLogContextValue {
   stopActivity: (note?: string) => { activity: TimeBlock | null; breaks: TimeBlock[] };
   cancelActivity: () => void;
   // blocks
-  addPastBlock: (input: { categoryId: string; start: number; end: number; note?: string }) => void;
-  updateBlock: (id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note">>) => void;
+  addPastBlock: (input: { categoryId: string; start: number; end: number; note?: string; link?: string }) => void;
+  addManyPastBlocks: (inputs: { categoryId: string; start: number; end: number; note?: string; link?: string }[]) => number;
+  updateBlock: (id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note" | "link">>) => void;
   deleteBlock: (id: string) => void;
   // theme + data
   setTheme: (t: "dark" | "light") => void;
@@ -236,7 +237,7 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
 
   const cancelActivity = useCallback(() => setActive(null), []);
 
-  const addPastBlock = useCallback(({ categoryId, start, end, note }: { categoryId: string; start: number; end: number; note?: string }) => {
+  const addPastBlock = useCallback(({ categoryId, start, end, note, link }: { categoryId: string; start: number; end: number; note?: string; link?: string }) => {
     const cat = categories.find((c) => c.id === categoryId);
     if (!cat || end <= start) return;
     setBlocks((bs) => [...bs, {
@@ -246,7 +247,29 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       type: cat.type,
       start, end,
       note: note?.trim() || undefined,
+      link: link?.trim() || undefined,
     }]);
+  }, [categories]);
+
+  const addManyPastBlocks = useCallback((inputs: { categoryId: string; start: number; end: number; note?: string; link?: string }[]) => {
+    const catMap = new Map(categories.map((c) => [c.id, c]));
+    const created: TimeBlock[] = [];
+    for (const i of inputs) {
+      const cat = catMap.get(i.categoryId);
+      if (!cat || i.end <= i.start) continue;
+      created.push({
+        id: uid("p"),
+        categoryId: cat.id,
+        categoryName: cat.name,
+        type: cat.type,
+        start: i.start,
+        end: i.end,
+        note: i.note?.trim() || undefined,
+        link: i.link?.trim() || undefined,
+      });
+    }
+    if (created.length) setBlocks((bs) => [...bs, ...created]);
+    return created.length;
   }, [categories]);
 
   const updateBlock = useCallback((id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note">>) => {
