@@ -311,7 +311,7 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       // Bulk update DB
       const uidv = userIdRef.current;
       if (uidv) {
-        const u: Record<string, unknown> = {};
+        const u: TablesUpdate<"time_blocks"> = {};
         if (patch.type) u.type = patch.type;
         if (patch.name) u.category_name = patch.name;
         void supabase.from("time_blocks").update(u).eq("category_id", id).eq("user_id", uidv);
