@@ -258,8 +258,7 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
   };
   const dbUpdateBlock = (id: string, patch: Partial<TimeBlock>) => {
     const uid = userIdRef.current; if (!uid) return;
-    const u: Record<string, unknown> = {};
-    type BlockUpdate = Parameters<ReturnType<typeof supabase.from<"time_blocks">>["update"]>[0];
+    const u: TablesUpdate<"time_blocks"> = {};
     if (patch.categoryId !== undefined) u.category_id = patch.categoryId;
     if (patch.categoryName !== undefined) u.category_name = patch.categoryName;
     if (patch.type !== undefined) u.type = patch.type;
