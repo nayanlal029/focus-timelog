@@ -203,19 +203,22 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
   const stopActivity = useCallback((note?: string) => {
     if (!active) return { activity: null, breaks: [] };
     const now = Date.now();
-    let activeMs = active.accumulatedMs;
-    if (active.runningSince) activeMs += now - active.runningSince;
     const cat = getCategory(active.categoryId);
-    if (!cat) {
-      setActive(null);
-      return { activity: null, breaks: [] };
-    }
-    // If currently in a break, log that break too
-    let endTime = now;
+    if (!cat) { setActive(null); return { activity: null, breaks: [] }; }
     const newBreaks: TimeBlock[] = [];
+    let endTime = now;
     if (active.breakStartedAt) {
-      // Stopping while paused => activity actually ended at breakStartedAt
+      // Stopping from break popup: activity ended at pause moment, break is its own block
       endTime = active.breakStartedAt;
+      newBreaks.push({
+        id: uid("b"),
+        categoryId: BREAK_CATEGORY_ID,
+        categoryName: "Break",
+        type: "neutral",
+        start: active.breakStartedAt,
+        end: now,
+        isBreak: true,
+      });
     }
     const activity: TimeBlock = {
       id: uid("a"),
@@ -223,12 +226,9 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       categoryName: cat.name,
       type: cat.type,
       start: active.startedAt,
-      end: active.startedAt + activeMs + active.breaks.reduce((s, b) => s + (b.end - b.start), 0),
+      end: endTime,
       note: note?.trim() || undefined,
     };
-    // Better: derive end from real wall clock so timeline shows true span;
-    // total active duration is end - start - breaks. We'll use real wall clock end:
-    activity.end = endTime;
     setBlocks((bs) => [...bs, activity, ...newBreaks]);
     setActive(null);
     return { activity, breaks: newBreaks };
