@@ -1,4 +1,4 @@
-# Focus-TimeLlog — Product Document
+# Focus-TimeLog — Product Document
 
 **Version:** 1.0 (Current)
 **Document Type:** Product Requirements & Feature Specification
