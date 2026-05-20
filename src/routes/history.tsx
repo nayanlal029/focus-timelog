@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, Search, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { useFilter } from "@/lib/focuslog/filter-context";
 import { dayKey, fmtDuration } from "@/lib/focuslog/format";
+import { overlapMs } from "@/lib/focuslog/aggregate";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { HourGantt } from "@/components/focuslog/HourGantt";
 import { FilterPanel } from "@/components/focuslog/FilterPanel";
@@ -25,22 +26,25 @@ function HistoryScreen() {
   const [selected, setSelected] = useState<string>(dayKey(today.getTime()));
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [catQuery, setCatQuery] = useState("");
+  const deferredQuery = useDeferredValue(catQuery);
 
   const filteredBlocks = useMemo(() => {
     if (!range) return [];
-    return blocks.filter((b) => b.start >= range.start && b.start <= range.end);
+    return blocks.filter((b) => overlapMs(b.start, b.end, range.start, range.end) > 0);
   }, [blocks, range]);
 
   const filteredTotals = useMemo(() => {
     const t = { focus: 0, distraction: 0, neutral: 0 };
+    if (!range) return t;
     filteredBlocks.forEach((b) => {
-      const d = b.end - b.start;
+      const d = overlapMs(b.start, b.end, range.start, range.end);
       if (b.type === "focus") t.focus += d;
       else if (b.type === "distraction") t.distraction += d;
       else t.neutral += d;
     });
     return t;
-  }, [filteredBlocks]);
+  }, [filteredBlocks, range]);
 
   const monthLabel = cursor.toLocaleDateString([], { month: "long", year: "numeric" });
   const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
