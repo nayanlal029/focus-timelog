@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Play, Plus } from "lucide-react";
+import { Play, Plus, Search, X, Timer as TimerIcon } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { haptic, dayKey } from "@/lib/focuslog/format";
 import { ChipRow } from "@/components/focuslog/ChipRow";
@@ -7,6 +7,10 @@ import { CategoryDialog } from "@/components/focuslog/CategoryDialog";
 import { AddPastActivitySheet, SaveActivitySheet } from "@/components/focuslog/Sheets";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { FocusMode } from "@/components/focuslog/FocusMode";
+import { Switch } from "@/components/ui/switch";
+import {
+  loadPomodoro, savePomodoro, useTimerAlerts, type PomodoroConfig,
+} from "@/lib/focuslog/alerts";
 import { cn } from "@/lib/utils";
 
 export function TodayScreen() {
@@ -21,6 +25,15 @@ export function TodayScreen() {
   const [draft, setDraft] = useState<null | { categoryId: string; categoryName: string; start: number; end: number; activeMs: number }>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Pomodoro config (mirrored to localStorage).
+  const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
+  useEffect(() => { savePomodoro(pomo); }, [pomo]);
+
+  // Schedules pomodoro + escalating pause alerts.
+  useTimerAlerts(active);
 
   const defaultId = useMemo(() => {
     if (active) return active.categoryId;
@@ -147,14 +160,87 @@ export function TodayScreen() {
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Choose category</h2>
-            <span className="text-[11px] text-muted-foreground">Recent first</span>
+            <button
+              type="button"
+              onClick={() => { setSearchOpen((o) => !o); if (searchOpen) setSearch(""); }}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                searchOpen ? "border-accent bg-accent text-accent-foreground" : "border-border bg-card text-muted-foreground",
+              )}
+              aria-label="Search categories"
+            >
+              {searchOpen ? <X className="h-3 w-3" /> : <Search className="h-3 w-3" />}
+              {searchOpen ? "Close" : "Search"}
+            </button>
           </div>
+          {searchOpen && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter categories…"
+                className="h-9 w-full rounded-full border border-border bg-card pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
           <ChipRow
             selectedId={selectedId}
             activeId={null}
+            filter={search}
             onPick={(id) => setSelectedId(id)}
             onAddNew={() => setAddCatOpen(true)}
           />
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TimerIcon className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <div className="text-sm font-semibold">Pomodoro</div>
+                <div className="text-[11px] text-muted-foreground">{pomo.workMin}m focus · {pomo.breakMin}m break</div>
+              </div>
+            </div>
+            <Switch
+              checked={pomo.enabled}
+              onCheckedChange={(c) => setPomo((p) => ({ ...p, enabled: c }))}
+              aria-label="Enable Pomodoro"
+            />
+          </div>
+          {pomo.enabled && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Work (min)</span>
+                <input
+                  type="number" min={1} max={120}
+                  value={pomo.workMin}
+                  onChange={(e) => setPomo((p) => ({ ...p, workMin: Math.min(120, Math.max(1, Number(e.target.value) || 1)) }))}
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Break (min)</span>
+                <input
+                  type="number" min={1} max={120}
+                  value={pomo.breakMin}
+                  onChange={(e) => setPomo((p) => ({ ...p, breakMin: Math.min(120, Math.max(1, Number(e.target.value) || 1)) }))}
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </label>
+            </div>
+          )}
         </section>
 
         <section className="space-y-3 pb-4">
