@@ -113,10 +113,10 @@ import { useAuth } from "@/lib/auth-context";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { user, ready } = useAuth();
+  const { user, ready, guest } = useAuth();
   if (!ready) {
     return <div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
   }
-  if (!user) return <LoginScreen />;
+  if (!user && !guest) return <LoginScreen />;
   return <>{children}</>;
 }
