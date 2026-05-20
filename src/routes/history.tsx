@@ -54,14 +54,22 @@ function HistoryScreen() {
   const blocksByDay = useMemo(() => {
     const map = new Map<string, { focus: number; distraction: number; neutral: number; count: number }>();
     blocks.forEach((b) => {
-      const k = dayKey(b.start);
-      const cur = map.get(k) ?? { focus: 0, distraction: 0, neutral: 0, count: 0 };
-      const dur = b.end - b.start;
-      if (b.type === "focus") cur.focus += dur;
-      else if (b.type === "distraction") cur.distraction += dur;
-      else cur.neutral += dur;
-      cur.count += 1;
-      map.set(k, cur);
+      const dStart = new Date(b.start); dStart.setHours(0, 0, 0, 0);
+      const dEnd = new Date(b.end); dEnd.setHours(0, 0, 0, 0);
+      const oneDay = 86400000;
+      for (let t = dStart.getTime(); t <= dEnd.getTime(); t += oneDay) {
+        const dayStart = t;
+        const dayEnd = t + oneDay - 1;
+        const ms = overlapMs(b.start, b.end, dayStart, dayEnd);
+        if (ms <= 0) continue;
+        const k = dayKey(t);
+        const cur = map.get(k) ?? { focus: 0, distraction: 0, neutral: 0, count: 0 };
+        if (b.type === "focus") cur.focus += ms;
+        else if (b.type === "distraction") cur.distraction += ms;
+        else cur.neutral += ms;
+        if (t === dStart.getTime()) cur.count += 1;
+        map.set(k, cur);
+      }
     });
     return map;
   }, [blocks]);
@@ -73,9 +81,15 @@ function HistoryScreen() {
     cells.push({ day: d, key: dayKey(date.getTime()) });
   }
 
-  const dayBlocks = blocks.filter((b) => dayKey(b.start) === selected);
-  const summary = blocksByDay.get(selected);
   const selectedDayStart = new Date(selected + "T00:00:00").getTime();
+  const selectedDayEnd = selectedDayStart + 86400000 - 1;
+  const q = deferredQuery.trim().toLowerCase();
+  const dayBlocks = blocks.filter((b) => {
+    if (overlapMs(b.start, b.end, selectedDayStart, selectedDayEnd) <= 0) return false;
+    if (q && !b.categoryName.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const summary = blocksByDay.get(selected);
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-6">
