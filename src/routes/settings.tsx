@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Download, LogOut, Moon, Pencil, Sun, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowDown, ArrowUp, BellRing, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -19,6 +19,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import type { Category } from "@/lib/focuslog/types";
+import {
+  loadPomodoro, savePomodoro, loadPauseAlerts, savePauseAlerts, type PomodoroConfig,
+} from "@/lib/focuslog/alerts";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "FocusLog — Settings" }] }),
@@ -27,12 +30,16 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsScreen() {
   const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData } = useFocusLog();
-  const { user, signOut } = useAuth();
+  const { user, guest, exitGuest, signOut } = useAuth();
   const [editing, setEditing] = useState<Category | null>(null);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
+  const [pauseAlerts, setPauseAlerts] = useState<boolean>(() => loadPauseAlerts());
+  useEffect(() => { savePomodoro(pomo); }, [pomo]);
+  useEffect(() => { savePauseAlerts(pauseAlerts); }, [pauseAlerts]);
 
   const move = (idx: number, dir: -1 | 1) => {
     const ids = categories.map((c) => c.id);

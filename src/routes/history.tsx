@@ -201,13 +201,29 @@ function HistoryScreen() {
           )}
         </div>
 
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={catQuery}
+            onChange={(e) => setCatQuery(e.target.value)}
+            placeholder="Search category…"
+            className="h-9 w-full rounded-full border border-border bg-card pl-9 pr-9 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          {catQuery && (
+            <button type="button" onClick={() => setCatQuery("")} aria-label="Clear" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
         <div>
           <div className="mb-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Day timeline</div>
           <HourGantt blocks={dayBlocks} dayStart={selectedDayStart} />
         </div>
 
-        <Timeline blocks={dayBlocks} emptyLabel="Nothing logged on this day." />
+        <Timeline blocks={dayBlocks} emptyLabel={q ? `No "${q}" entries on this day.` : "Nothing logged on this day."} />
       </div>
+
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
