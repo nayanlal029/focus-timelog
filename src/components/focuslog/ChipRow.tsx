@@ -8,11 +8,12 @@ interface Props {
   selectedId: string | null;
   activeId: string | null;
   disabled?: boolean;
+  filter?: string;
   onPick: (id: string) => void;
   onAddNew: () => void;
 }
 
-export function ChipRow({ selectedId, activeId, disabled, onPick, onAddNew }: Props) {
+export function ChipRow({ selectedId, activeId, disabled, filter, onPick, onAddNew }: Props) {
   const { categories, blocks } = useFocusLog();
 
   const sorted = useMemo(() => {
@@ -22,13 +23,15 @@ export function ChipRow({ selectedId, activeId, disabled, onPick, onAddNew }: Pr
       const prev = lastUsed.get(b.categoryId) ?? 0;
       if (b.start > prev) lastUsed.set(b.categoryId, b.start);
     }
-    return [...categories].sort((a, b) => {
+    const q = (filter ?? "").trim().toLowerCase();
+    const list = q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : categories;
+    return [...list].sort((a, b) => {
       const la = lastUsed.get(a.id) ?? 0;
       const lb = lastUsed.get(b.id) ?? 0;
       if (lb !== la) return lb - la;
       return a.order - b.order;
     });
-  }, [categories, blocks]);
+  }, [categories, blocks, filter]);
 
   return (
     <div className="flex flex-wrap gap-2">
