@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 
 export function LoginScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const { enterGuest } = useAuth();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -94,6 +96,17 @@ export function LoginScreen() {
         >
           {mode === "login" ? "No account? Sign up" : "Already have an account? Sign in"}
         </button>
+
+        <button
+          type="button"
+          onClick={enterGuest}
+          className="mt-2 w-full text-center text-xs text-muted-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Continue without signing in
+        </button>
+        <p className="mt-1 text-center text-[10px] text-muted-foreground/70">
+          Data stays on this device. Sign in later to sync.
+        </p>
       </div>
     </div>
   );

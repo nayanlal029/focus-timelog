@@ -85,7 +85,7 @@ function categoryFromRow(r: DbCatRow): Category {
 }
 
 export function FocusLogProvider({ children }: { children: ReactNode }) {
-  const { user, ready: authReady } = useAuth();
+  const { user, ready: authReady, guest } = useAuth();
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -102,10 +102,19 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
     setActive(storage.loadActive());
   }, []);
 
-  // Hydrate from DB whenever the user changes
+  // Hydrate from DB whenever the user changes (or locally in guest mode)
   useEffect(() => {
     if (!authReady) return;
     userIdRef.current = user?.id ?? null;
+
+    // Guest mode: load purely from localStorage, no Supabase.
+    if (!user && guest) {
+      setCategories(storage.loadCategories());
+      setBlocks(storage.loadBlocks());
+      setReady(true);
+      return;
+    }
+
     if (!user) {
       setCategories([]);
       setBlocks([]);
@@ -196,7 +205,19 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [user, authReady]);
+  }, [user, authReady, guest]);
+
+  // Persist categories/blocks locally in guest mode so they survive reloads.
+  useEffect(() => {
+    if (!ready || user) return;
+    if (!guest) return;
+    storage.saveCategories(categories);
+  }, [categories, ready, user, guest]);
+  useEffect(() => {
+    if (!ready || user) return;
+    if (!guest) return;
+    storage.saveBlocks(blocks);
+  }, [blocks, ready, user, guest]);
 
   // Apply theme class
   useEffect(() => {

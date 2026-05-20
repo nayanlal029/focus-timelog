@@ -3,7 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Filter, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { useFilter } from "@/lib/focuslog/filter-context";
-import { dayKey, fmtDuration } from "@/lib/focuslog/format";
+import { fmtDuration } from "@/lib/focuslog/format";
+import { clipBlocks, sumByType, topByCategory, overlapMs } from "@/lib/focuslog/aggregate";
 import { FilterPanel } from "@/components/focuslog/FilterPanel";
 import { cn } from "@/lib/utils";
 
@@ -17,14 +18,14 @@ function DashboardScreen() {
   const { range, from, to } = useFilter();
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const filtered = useMemo(() => {
+  const clipped = useMemo(() => {
     if (!range) return [];
-    return blocks.filter((b) => b.start >= range.start && b.start <= range.end);
+    return clipBlocks(blocks, range.start, range.end);
   }, [blocks, range]);
 
-  const totals = useMemo(() => sumByType(filtered), [filtered]);
+  const totals = useMemo(() => sumByType(clipped), [clipped]);
 
-  // bucket per day across selected range
+  // Per-day buckets: clip each block to each day's window so cross-midnight blocks split.
   const days = useMemo(() => {
     if (!range) return [];
     const out: { label: string; key: string; focus: number; distraction: number; neutral: number }[] = [];
@@ -34,28 +35,34 @@ function DashboardScreen() {
     const dayCount = Math.min(60, Math.floor((end.getTime() - start.getTime()) / oneDay) + 1);
     for (let i = 0; i < dayCount; i++) {
       const d = new Date(start.getTime() + i * oneDay);
-      const k = dayKey(d.getTime());
-      const dayBlocks = filtered.filter((b) => dayKey(b.start) === k);
-      const t = sumByType(dayBlocks);
+      const dayStart = d.getTime();
+      const dayEnd = dayStart + oneDay - 1;
+      const wStart = Math.max(dayStart, range.start);
+      const wEnd = Math.min(dayEnd, range.end);
+      const t = { focus: 0, distraction: 0, neutral: 0 };
+      for (const b of blocks) {
+        const ms = overlapMs(b.start, b.end, wStart, wEnd);
+        if (ms > 0) t[b.type] += ms;
+      }
       out.push({
         label: dayCount <= 14
           ? d.toLocaleDateString([], { weekday: "narrow" })
           : String(d.getDate()),
-        key: k,
+        key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
         focus: t.focus,
         distraction: t.distraction,
         neutral: t.neutral,
       });
     }
     return out;
-  }, [range, filtered]);
+  }, [range, blocks]);
 
   const maxBar = Math.max(1, ...days.map((d) => Math.max(d.focus, d.distraction)));
 
-  const topFocus = topByCategory(filtered.filter((b) => b.type === "focus")).slice(0, 5);
-  const topDistr = topByCategory(filtered.filter((b) => b.type === "distraction")).slice(0, 5);
+  const topFocus = topByCategory(clipped.filter((c) => c.block.type === "focus")).slice(0, 5);
+  const topDistr = topByCategory(clipped.filter((c) => c.block.type === "distraction")).slice(0, 5);
 
-  const sessionCount = filtered.length;
+  const sessionCount = clipped.length;
   const totalMs = totals.focus + totals.distraction + totals.neutral;
   const focusPct = totalMs > 0 ? Math.round((totals.focus / totalMs) * 100) : 0;
   const avgSessionMs = sessionCount > 0 ? Math.round(totalMs / sessionCount) : 0;
@@ -126,20 +133,6 @@ function DashboardScreen() {
       </section>
     </div>
   );
-}
-
-function sumByType(bs: { type: "focus" | "distraction" | "neutral"; start: number; end: number }[]) {
-  const out = { focus: 0, distraction: 0, neutral: 0 };
-  bs.forEach((b) => { out[b.type] += b.end - b.start; });
-  return out;
-}
-
-function topByCategory(bs: { categoryName: string; start: number; end: number }[]) {
-  const map = new Map<string, number>();
-  bs.forEach((b) => map.set(b.categoryName, (map.get(b.categoryName) ?? 0) + (b.end - b.start)));
-  return Array.from(map.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, ms]) => ({ name, ms }));
 }
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone: "focus" | "distraction" | "neutral" }) {

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, Search, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { useFilter } from "@/lib/focuslog/filter-context";
 import { dayKey, fmtDuration } from "@/lib/focuslog/format";
+import { overlapMs } from "@/lib/focuslog/aggregate";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { HourGantt } from "@/components/focuslog/HourGantt";
 import { FilterPanel } from "@/components/focuslog/FilterPanel";
@@ -25,22 +26,25 @@ function HistoryScreen() {
   const [selected, setSelected] = useState<string>(dayKey(today.getTime()));
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [catQuery, setCatQuery] = useState("");
+  const deferredQuery = useDeferredValue(catQuery);
 
   const filteredBlocks = useMemo(() => {
     if (!range) return [];
-    return blocks.filter((b) => b.start >= range.start && b.start <= range.end);
+    return blocks.filter((b) => overlapMs(b.start, b.end, range.start, range.end) > 0);
   }, [blocks, range]);
 
   const filteredTotals = useMemo(() => {
     const t = { focus: 0, distraction: 0, neutral: 0 };
+    if (!range) return t;
     filteredBlocks.forEach((b) => {
-      const d = b.end - b.start;
+      const d = overlapMs(b.start, b.end, range.start, range.end);
       if (b.type === "focus") t.focus += d;
       else if (b.type === "distraction") t.distraction += d;
       else t.neutral += d;
     });
     return t;
-  }, [filteredBlocks]);
+  }, [filteredBlocks, range]);
 
   const monthLabel = cursor.toLocaleDateString([], { month: "long", year: "numeric" });
   const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -50,14 +54,22 @@ function HistoryScreen() {
   const blocksByDay = useMemo(() => {
     const map = new Map<string, { focus: number; distraction: number; neutral: number; count: number }>();
     blocks.forEach((b) => {
-      const k = dayKey(b.start);
-      const cur = map.get(k) ?? { focus: 0, distraction: 0, neutral: 0, count: 0 };
-      const dur = b.end - b.start;
-      if (b.type === "focus") cur.focus += dur;
-      else if (b.type === "distraction") cur.distraction += dur;
-      else cur.neutral += dur;
-      cur.count += 1;
-      map.set(k, cur);
+      const dStart = new Date(b.start); dStart.setHours(0, 0, 0, 0);
+      const dEnd = new Date(b.end); dEnd.setHours(0, 0, 0, 0);
+      const oneDay = 86400000;
+      for (let t = dStart.getTime(); t <= dEnd.getTime(); t += oneDay) {
+        const dayStart = t;
+        const dayEnd = t + oneDay - 1;
+        const ms = overlapMs(b.start, b.end, dayStart, dayEnd);
+        if (ms <= 0) continue;
+        const k = dayKey(t);
+        const cur = map.get(k) ?? { focus: 0, distraction: 0, neutral: 0, count: 0 };
+        if (b.type === "focus") cur.focus += ms;
+        else if (b.type === "distraction") cur.distraction += ms;
+        else cur.neutral += ms;
+        if (t === dStart.getTime()) cur.count += 1;
+        map.set(k, cur);
+      }
     });
     return map;
   }, [blocks]);
@@ -69,9 +81,15 @@ function HistoryScreen() {
     cells.push({ day: d, key: dayKey(date.getTime()) });
   }
 
-  const dayBlocks = blocks.filter((b) => dayKey(b.start) === selected);
-  const summary = blocksByDay.get(selected);
   const selectedDayStart = new Date(selected + "T00:00:00").getTime();
+  const selectedDayEnd = selectedDayStart + 86400000 - 1;
+  const q = deferredQuery.trim().toLowerCase();
+  const dayBlocks = blocks.filter((b) => {
+    if (overlapMs(b.start, b.end, selectedDayStart, selectedDayEnd) <= 0) return false;
+    if (q && !b.categoryName.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const summary = blocksByDay.get(selected);
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-6">
@@ -183,13 +201,29 @@ function HistoryScreen() {
           )}
         </div>
 
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={catQuery}
+            onChange={(e) => setCatQuery(e.target.value)}
+            placeholder="Search category…"
+            className="h-9 w-full rounded-full border border-border bg-card pl-9 pr-9 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          {catQuery && (
+            <button type="button" onClick={() => setCatQuery("")} aria-label="Clear" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
         <div>
           <div className="mb-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Day timeline</div>
           <HourGantt blocks={dayBlocks} dayStart={selectedDayStart} />
         </div>
 
-        <Timeline blocks={dayBlocks} emptyLabel="Nothing logged on this day." />
+        <Timeline blocks={dayBlocks} emptyLabel={q ? `No "${q}" entries on this day.` : "Nothing logged on this day."} />
       </div>
+
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
