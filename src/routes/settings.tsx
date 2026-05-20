@@ -118,17 +118,71 @@ function SettingsScreen() {
           </Button>
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          {blocks.length} entries synced to your account.
+          {guest ? `${blocks.length} entries stored on this device.` : `${blocks.length} entries synced to your account.`}
         </p>
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="mb-1 text-sm font-semibold">Account</h2>
-        <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
-        <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
-          <LogOut className="h-4 w-4" /> Sign out
-        </Button>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TimerIcon className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Pomodoro</h2>
+          </div>
+          <Switch checked={pomo.enabled} onCheckedChange={(c) => setPomo((p) => ({ ...p, enabled: c }))} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Work (min)</span>
+            <Input type="number" min={1} max={120} value={pomo.workMin}
+              onChange={(e) => setPomo((p) => ({ ...p, workMin: Math.min(120, Math.max(1, Number(e.target.value) || 1)) }))} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Break (min)</span>
+            <Input type="number" min={1} max={120} value={pomo.breakMin}
+              onChange={(e) => setPomo((p) => ({ ...p, breakMin: Math.min(120, Math.max(1, Number(e.target.value) || 1)) }))} />
+          </label>
+        </div>
       </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BellRing className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <Label>Pause alerts</Label>
+              <p className="text-[11px] text-muted-foreground">Beep at 5, 10, 15, 30, 60, 90 min while paused.</p>
+            </div>
+          </div>
+          <Switch checked={pauseAlerts} onCheckedChange={setPauseAlerts} />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-semibold">Account</h2>
+        {guest ? (
+          <>
+            <p className="mb-3 text-[11px] text-muted-foreground">Guest — data stays on this device.</p>
+            <Button variant="outline" className="w-full justify-start" onClick={exitGuest}>
+              <LogIn className="h-4 w-4" /> Sign in to sync
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+            <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
+              <LogOut className="h-4 w-4" /> Sign out
+            </Button>
+          </>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <Link to="/changelog" className="flex items-center justify-between text-sm font-medium">
+          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" /> Changelog</span>
+          <span className="text-xs text-muted-foreground">What's new →</span>
+        </Link>
+      </section>
+
 
       <CategoryDialog open={newCatOpen} onOpenChange={setNewCatOpen} />
       <CategoryDialog
