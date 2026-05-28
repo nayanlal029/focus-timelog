@@ -5,58 +5,94 @@ import com.focuslog.wear.data.local.CategoryEntity
 import com.focuslog.wear.data.local.PendingBlockEntity
 import com.focuslog.wear.data.local.WatchDatabase
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
-/**
- * Reads categories from Supabase (cached in Room for offline use) and writes time_blocks.
- * Writes go through a local queue first so nothing is lost when the watch is offline.
- */
 class SupabaseRepository(context: Context) {
 
     private val db = WatchDatabase.get(context)
     private val client = SupabaseProvider.client
 
-    /** Offline-first: UI observes the Room cache; [refreshCategories] keeps it fresh. */
+    // ── Categories ────────────────────────────────────────────────────────────
+
     fun observeCategories(): Flow<List<Category>> =
         db.categoryDao().observeAll().map { rows ->
             rows.map { Category(it.id, it.name, CategoryType.from(it.type), it.order) }
         }
 
-    /** Pull categories from Supabase into the local cache. Safe to call on every launch/foreground. */
     suspend fun refreshCategories(): Result<Unit> = runCatching {
         val rows = client.from("categories")
             .select()
             .decodeList<CategoryRow>()
         val entities = rows.map { CategoryEntity(it.id, it.name, it.type, it.order) }
         db.categoryDao().upsertAll(entities)
-        db.categoryDao().deleteMissing(entities.map { it.id })
+        if (entities.isNotEmpty()) db.categoryDao().deleteMissing(entities.map { it.id })
     }
 
+    suspend fun addCategory(name: String, type: CategoryType, userId: String): Result<Category> =
+        runCatching {
+            val id = UUID.randomUUID().toString()
+            val maxOrder = db.categoryDao().getAll().maxOfOrNull { it.order } ?: 0
+            val insert = CategoryInsert(
+                id = id,
+                userId = userId,
+                name = name,
+                type = type.wire,
+                order = maxOrder + 1,
+            )
+            client.from("categories").insert(insert)
+            val entity = CategoryEntity(id, name, type.wire, maxOrder + 1)
+            db.categoryDao().upsertAll(listOf(entity))
+            Category(id, name, type, maxOrder + 1)
+        }
+
+    // ── Time blocks ───────────────────────────────────────────────────────────
+
     /**
-     * Queue a block and immediately try to flush. The block is durable the moment it is queued;
-     * if the network insert fails it stays queued for [flushPending] / SyncWorker to retry.
+     * Queue-first save: the block is durable the moment it is written to Room.
+     * [flushPending] then attempts an immediate upload.
      */
     suspend fun saveBlock(block: TimeBlockInsert) {
         db.pendingBlockDao().insert(block.toPending())
         flushPending()
     }
 
-    /** Attempt to upload every queued block. Successful rows are removed from the queue. */
+    /** Flush queued blocks to Supabase. Stops at first failure (retry by SyncWorker). */
     suspend fun flushPending(): Result<Int> = runCatching {
-        val pending = db.pendingBlockDao().getAll()
         var sent = 0
-        for (p in pending) {
-            runCatching {
+        for (p in db.pendingBlockDao().getAll()) {
+            val ok = runCatching {
                 client.from("time_blocks").insert(p.toInsert())
+            }.isSuccess
+            if (ok) {
                 db.pendingBlockDao().delete(p.id)
                 sent++
-            }.onFailure { return@runCatching sent } // stop on first failure; retry later
+            } else {
+                break  // leave remaining in queue for SyncWorker to retry
+            }
         }
         sent
     }
 
     suspend fun pendingCount(): Int = db.pendingBlockDao().count()
+
+    // ── Summary (read-only, 24 h / 7 d) ──────────────────────────────────────
+
+    suspend fun fetchSummary(startMs: Long): Result<List<TimeBlockRow>> = runCatching {
+        client.from("time_blocks")
+            .select {
+                filter {
+                    gte("start_ms", startMs)
+                    eq("is_break", false)
+                }
+                order("start_ms", Order.DESCENDING)
+            }
+            .decodeList<TimeBlockRow>()
+    }
+
+    // ── Mapping helpers ───────────────────────────────────────────────────────
 
     private fun TimeBlockInsert.toPending() = PendingBlockEntity(
         id = id, userId = userId, categoryId = categoryId, categoryName = categoryName,

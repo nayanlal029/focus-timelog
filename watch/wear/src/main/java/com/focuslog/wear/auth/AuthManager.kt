@@ -1,6 +1,8 @@
 package com.focuslog.wear.auth
 
+import android.app.Activity
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.focuslog.wear.BuildConfig
@@ -10,39 +12,59 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.IDToken
+import io.github.jan.supabase.auth.user.UserSession
 
 /**
- * Handles one-time Google sign-in on the watch and restoration of an existing session.
+ * Handles one-time Google sign-in and session restoration.
  *
- * Flow:
- *  1. [restore] — if a refresh token is stored, hand it to supabase-kt and refresh → no UI.
- *  2. [signInWithGoogle] — Credential Manager returns a Google ID token minted for the Supabase
- *     Google provider's Web client ID; we exchange it via Supabase `signInWith(IDToken)`.
- *  3. After either path, we persist the resulting session tokens via [SessionStore].
+ * Session tokens are kept in plain SharedPreferences for simplicity (upgrade to
+ * EncryptedSharedPreferences before shipping to others).
+ *
+ * Flow on cold start:
+ *  1. [restore] — loads stored refresh token → importSession → auto-refresh if expired.
+ *  2. If no token: [signInWithGoogle] requires a live Activity for Credential Manager.
  */
 class AuthManager(context: Context) {
 
     private val appContext = context.applicationContext
-    private val store = SessionStore(appContext)
     private val auth get() = SupabaseProvider.client.auth
 
-    fun hasStoredSession(): Boolean = store.hasSession()
+    private val prefs: SharedPreferences =
+        appContext.getSharedPreferences("focuslog_session", Context.MODE_PRIVATE)
 
-    /** Restore a session from the stored refresh token. Returns true if a valid session exists. */
+    fun hasStoredSession(): Boolean = prefs.getString(KEY_REFRESH, null) != null
+
+    /**
+     * Restore a session from the stored refresh token.
+     * NOTE: UserSession import path may vary by supabase-kt version.
+     * If this fails to compile try: io.github.jan.supabase.auth.UserSession
+     */
     suspend fun restore(): Boolean {
-        val refresh = store.refreshToken() ?: return false
+        val access = prefs.getString(KEY_ACCESS, "") ?: ""
+        val refresh = prefs.getString(KEY_REFRESH, null) ?: return false
         return runCatching {
-            auth.refreshSession(refresh)
+            auth.importSession(
+                UserSession(
+                    accessToken = access,
+                    refreshToken = refresh,
+                    expiresIn = 0L,   // 0 forces immediate refresh via the refresh token
+                    tokenType = "bearer",
+                    user = null,
+                )
+            )
             persistCurrent()
             true
         }.getOrElse {
-            store.clear()
+            prefs.edit().clear().apply()
             false
         }
     }
 
-    /** Launch the Google credential picker and exchange the ID token for a Supabase session. */
-    suspend fun signInWithGoogle(): Result<Unit> = runCatching {
+    /**
+     * Launch the Google credential picker. MUST be called from a live Activity context.
+     * On Wear OS the user taps "Sign in with Google" → watch shows the account picker → done.
+     */
+    suspend fun signInWithGoogle(activity: Activity): Result<Unit> = runCatching {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
             .setFilterByAuthorizedAccounts(false)
@@ -51,8 +73,8 @@ class AuthManager(context: Context) {
             .addCredentialOption(googleIdOption)
             .build()
 
-        val response = CredentialManager.create(appContext)
-            .getCredential(appContext, request)
+        val response = CredentialManager.create(activity)
+            .getCredential(activity, request)
         val googleCred = GoogleIdTokenCredential.createFrom(response.credential.data)
 
         auth.signInWith(IDToken) {
@@ -64,14 +86,21 @@ class AuthManager(context: Context) {
 
     suspend fun signOut() {
         runCatching { auth.signOut() }
-        store.clear()
+        prefs.edit().clear().apply()
     }
 
-    /** The signed-in user id, used as `user_id` on inserted blocks. */
     fun currentUserId(): String? = auth.currentSessionOrNull()?.user?.id
 
     private fun persistCurrent() {
-        val session = auth.currentSessionOrNull() ?: return
-        store.save(session.accessToken, session.refreshToken)
+        val s = auth.currentSessionOrNull() ?: return
+        prefs.edit()
+            .putString(KEY_ACCESS, s.accessToken)
+            .putString(KEY_REFRESH, s.refreshToken)
+            .apply()
+    }
+
+    private companion object {
+        const val KEY_ACCESS = "access_token"
+        const val KEY_REFRESH = "refresh_token"
     }
 }

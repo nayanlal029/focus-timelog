@@ -1,6 +1,9 @@
 package com.focuslog.wear.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.focuslog.wear.auth.AuthManager
@@ -13,9 +16,12 @@ import com.focuslog.wear.data.TimeBlockInsert
 import com.focuslog.wear.data.local.ActiveStateEntity
 import com.focuslog.wear.data.local.WatchDatabase
 import com.focuslog.wear.service.TimerForegroundService
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,15 +29,14 @@ import java.util.UUID
 
 enum class TimerPhase { IDLE, RUNNING, PAUSED }
 
-/** Snapshot consumed by the UI. Elapsed values are recomputed each tick from [active]. */
 data class Active(
     val categoryId: String,
     val categoryName: String,
     val type: CategoryType,
     val startedAt: Long,
-    val runningSince: Long?,        // null => paused
-    val breakStartedAt: Long?,      // set while paused
-    val accumulatedBreakMs: Long,   // sum of completed breaks
+    val runningSince: Long?,
+    val breakStartedAt: Long?,
+    val accumulatedBreakMs: Long,
 ) {
     val phase: TimerPhase get() = if (runningSince != null) TimerPhase.RUNNING else TimerPhase.PAUSED
 
@@ -44,6 +49,17 @@ data class Active(
         breakStartedAt?.let { (now - it).coerceAtLeast(0) } ?: 0L
 }
 
+// ── Alert events ──────────────────────────────────────────────────────────────
+
+sealed interface WatchAlert {
+    /** Break has exceeded the distraction threshold. */
+    object DistractionThreshold : WatchAlert
+    /** Pomodoro work session is done — time for a break. */
+    object PomodoroWorkDone : WatchAlert
+    /** Pomodoro break is over — time to focus again. */
+    object PomodoroBreakDone : WatchAlert
+}
+
 class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = SupabaseRepository(app)
@@ -51,17 +67,33 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private val db = WatchDatabase.get(app)
 
     val categories: StateFlow<List<Category>> =
-        repo.observeCategories().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        repo.observeCategories()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _active = MutableStateFlow<Active?>(null)
     val active: StateFlow<Active?> = _active.asStateFlow()
 
-    /** Ticks once a second to drive the elapsed-time display. */
     private val _now = MutableStateFlow(System.currentTimeMillis())
     val now: StateFlow<Long> = _now.asStateFlow()
 
+    // ── Pomodoro ──────────────────────────────────────────────────────────────
+    private val _pomodoroEnabled = MutableStateFlow(false)
+    val pomodoroEnabled: StateFlow<Boolean> = _pomodoroEnabled.asStateFlow()
+
+    /** Configurable work duration. Default 25 min. */
+    val pomodoroWorkMs: Long = 25 * 60 * 1000L
+
+    // ── Alerts ────────────────────────────────────────────────────────────────
+    private val _alert = MutableSharedFlow<WatchAlert>(extraBufferCapacity = 2)
+    val alert: SharedFlow<WatchAlert> = _alert.asSharedFlow()
+
+    /** Distraction threshold (default 5 min). Fires once per continuous pause. */
+    var distractionThresholdMs: Long = 5 * 60 * 1000L
+
+    private var distractionAlerted = false
+    private var pomodoroWorkAlerted = false
+
     init {
-        // Restore any in-flight timer that survived process death.
         viewModelScope.launch {
             db.activeStateDao().get()?.let { e ->
                 _active.value = Active(
@@ -75,16 +107,50 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        // Keep categories fresh from Supabase.
         viewModelScope.launch { repo.refreshCategories() }
-        // Drive the clock.
+
+        // Clock + alert checker — 1 s tick
         viewModelScope.launch {
             while (true) {
-                _now.value = System.currentTimeMillis()
+                val now = System.currentTimeMillis()
+                _now.value = now
+                checkAlerts(now)
                 kotlinx.coroutines.delay(1_000)
             }
         }
     }
+
+    private fun checkAlerts(now: Long) {
+        val a = _active.value ?: run {
+            distractionAlerted = false
+            pomodoroWorkAlerted = false
+            return
+        }
+
+        // Distraction alert: fires once when a continuous break crosses the threshold
+        if (a.phase == TimerPhase.PAUSED) {
+            val breakMs = a.breakElapsed(now)
+            if (!distractionAlerted && breakMs >= distractionThresholdMs) {
+                distractionAlerted = true
+                _alert.tryEmit(WatchAlert.DistractionThreshold)
+                vibrate()
+            }
+        } else {
+            distractionAlerted = false  // reset after resuming
+        }
+
+        // Pomodoro work-done alert
+        if (_pomodoroEnabled.value && a.phase == TimerPhase.RUNNING) {
+            val focus = a.focusElapsed(now)
+            if (!pomodoroWorkAlerted && focus >= pomodoroWorkMs) {
+                pomodoroWorkAlerted = true
+                _alert.tryEmit(WatchAlert.PomodoroWorkDone)
+                vibrate()
+            }
+        }
+    }
+
+    // ── Timer actions ─────────────────────────────────────────────────────────
 
     fun startActivity(category: Category) {
         val now = System.currentTimeMillis()
@@ -97,11 +163,12 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
             breakStartedAt = null,
             accumulatedBreakMs = 0,
         )
+        pomodoroWorkAlerted = false
+        distractionAlerted = false
         persist()
         TimerForegroundService.start(getApplication())
     }
 
-    /** Pause the stopwatch — this is where the break/distraction timer begins. */
     fun pause() {
         val a = _active.value ?: return
         if (a.phase != TimerPhase.RUNNING) return
@@ -115,20 +182,19 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         if (a.phase != TimerPhase.PAUSED) return
         val now = System.currentTimeMillis()
         val breakStart = a.breakStartedAt ?: now
-        // Close the break as its own block so the web app shows the gap.
         queueBreakBlock(breakStart, now)
         _active.value = a.copy(
             runningSince = now,
             breakStartedAt = null,
             accumulatedBreakMs = a.accumulatedBreakMs + (now - breakStart),
         )
+        distractionAlerted = false
         persist()
     }
 
     fun stop() {
         val a = _active.value ?: return
         val now = System.currentTimeMillis()
-        // If paused at stop, the activity ended when the pause began; close the trailing break too.
         val activityEnd = a.breakStartedAt ?: now
         if (a.breakStartedAt != null) queueBreakBlock(a.breakStartedAt, now)
 
@@ -152,8 +218,22 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         clearActive()
     }
 
-    /** Discard the running timer without logging anything. */
     fun cancel() = clearActive()
+
+    fun togglePomodoro() {
+        _pomodoroEnabled.value = !_pomodoroEnabled.value
+        pomodoroWorkAlerted = false
+    }
+
+    fun addCategory(name: String, type: CategoryType) {
+        val userId = auth.currentUserId() ?: return
+        viewModelScope.launch {
+            repo.addCategory(name, type, userId)
+            // Room cache is updated inside addCategory; Flow will emit the new list automatically.
+        }
+    }
+
+    // ── Internal ──────────────────────────────────────────────────────────────
 
     private fun queueBreakBlock(start: Long, end: Long) {
         if (end <= start) return
@@ -176,6 +256,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun clearActive() {
         _active.value = null
+        pomodoroWorkAlerted = false
+        distractionAlerted = false
         viewModelScope.launch { db.activeStateDao().clear() }
         TimerForegroundService.stop(getApplication())
     }
@@ -194,6 +276,16 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                     breakStartedAt = a.breakStartedAt,
                     accumulatedBreakMs = a.accumulatedBreakMs,
                 )
+            )
+        }
+    }
+
+    private fun vibrate() {
+        runCatching {
+            val vm = getApplication<Application>()
+                .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vm.defaultVibrator.vibrate(
+                VibrationEffect.createWaveform(longArrayOf(0, 300, 100, 300), -1)
             )
         }
     }

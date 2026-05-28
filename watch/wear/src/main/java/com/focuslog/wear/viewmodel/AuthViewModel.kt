@@ -1,5 +1,6 @@
 package com.focuslog.wear.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,17 +19,29 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AuthState.LOADING)
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init {
         viewModelScope.launch {
             _state.value = if (auth.restore()) AuthState.SIGNED_IN else AuthState.SIGNED_OUT
         }
     }
 
-    fun signIn() {
+    /** Must be called from a Composable that has access to an Activity via LocalContext. */
+    fun signIn(activity: Activity) {
         _state.value = AuthState.LOADING
+        _error.value = null
         viewModelScope.launch {
-            val ok = auth.signInWithGoogle().isSuccess
-            _state.value = if (ok) AuthState.SIGNED_IN else AuthState.SIGNED_OUT
+            val result = auth.signInWithGoogle(activity)
+            if (result.isSuccess) {
+                _state.value = AuthState.SIGNED_IN
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Sign-in failed"
+                _state.value = AuthState.SIGNED_OUT
+            }
         }
     }
+
+    fun clearError() { _error.value = null }
 }
