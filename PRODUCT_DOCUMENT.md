@@ -30,6 +30,7 @@
 9. [Security & Data Privacy](#9-security--data-privacy)
 10. [Metrics & Success Criteria](#10-metrics--success-criteria)
 11. [Known Limitations & Future Opportunities](#11-known-limitations--future-opportunities)
+12. [Companion Apps — Galaxy Watch 7](#12-companion-apps--galaxy-watch-7)
 
 ---
 
@@ -741,6 +742,55 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | **Team / manager view** | Aggregated reports for remote teams (opt-in, privacy-preserving) |
 | **Offline-first with sync queue** | Queue failed DB writes and replay on reconnect |
 | **API / Webhooks** | Let power users push data to Notion, Obsidian, or custom dashboards |
+
+---
+
+## 12. Companion Apps — Galaxy Watch 7
+
+To remove the friction of pulling out a phone to start or stop a timer mid-work, a **Wear OS
+companion app** for the Samsung Galaxy Watch 7 lives in the `watch/` directory of this repository.
+
+### Role: logging only
+
+The watch is a **companion**, not a replacement. It handles the high-frequency, low-friction
+actions — **Start / Pause / Resume / Stop** — while the web app retains everything else
+(dashboard, history, Chrome import, Excel export, category management). This keeps the watch UI
+glanceable and the codebases focused.
+
+### How it connects
+
+| Aspect | Approach |
+|--------|----------|
+| Platform | Wear OS 5 (Galaxy Watch 7); Kotlin + Jetpack Compose for Wear OS |
+| Connectivity | **Standalone** — the watch talks to Supabase directly over its own WiFi/LTE; no phone app required |
+| Auth | **One-time Google sign-in** on the watch via Credential Manager → `signInWith(IDToken)`; session stored encrypted and auto-refreshed |
+| Backend | The **same** Supabase project — no schema changes. The watch is just another REST client subject to the same RLS (`auth.uid() = user_id`) |
+| Categories | Read from Supabase and cached locally (Room) so the picker works offline |
+| Time blocks | Inserted to Supabase using the exact `time_blocks` columns; appear in the web app instantly via the existing Realtime subscription |
+| Offline | Blocks are queued locally first and flushed by a WorkManager retry job when connectivity returns — closing the web app's "no offline queue" gap on the watch side |
+
+### Watch screens
+
+1. **Category Picker** — focus-first list of the user's categories; tap to start. A running timer
+   is surfaced at the top.
+2. **Active Timer** — large `HH:MM:SS` display with Pause/Resume and Stop. Pausing starts the
+   **break / distraction timer** immediately, shown alongside.
+3. **Stop Confirmation** — confirms duration before logging (no note field; no keyboard on watch).
+
+Plus a **Tile** for one-tap access from the watch face, and a foreground service so the timer
+survives the wrist-down / app-backgrounded state.
+
+### Break handling
+
+Pausing records a break window; on resume (or stop), a separate `is_break = true` block is logged
+for that window — mirroring the web app's break-block behavior so the timeline stays gap-free
+across devices.
+
+### Status
+
+Scaffolded with full structure and core logic in `watch/`; intended to be opened, configured
+(`secrets.properties`), and built in Android Studio. See `watch/IMPLEMENTATION_NOTES.md` for the
+done/remaining breakdown and `watch/README.md` for setup.
 
 ---
 

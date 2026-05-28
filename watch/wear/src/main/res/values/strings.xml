@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Focus</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="sign_in_prompt">Sign in to load your categories</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="stop">Stop</string>
+    <string name="stop_confirm_title">Stop \"%1$s\"?</string>
+    <string name="yes">Yes</string>
+    <string name="cancel">Cancel</string>
+    <string name="running">Running</string>
+    <string name="no_categories">No categories yet. Add them in the web app.</string>
+    <string name="timer_notification_channel">Active timer</string>
+</resources>
