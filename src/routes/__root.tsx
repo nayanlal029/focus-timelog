@@ -111,12 +111,16 @@ function RootComponent() {
 
 import { useAuth } from "@/lib/auth-context";
 import { LoginScreen } from "@/components/auth/LoginScreen";
+import { useRouterState } from "@tanstack/react-router";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, ready, guest } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (!ready) {
     return <div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
   }
+  // Public auth-recovery route: always reachable.
+  if (pathname === "/reset-password") return <>{children}</>;
   if (!user && !guest) return <LoginScreen />;
   return <>{children}</>;
 }

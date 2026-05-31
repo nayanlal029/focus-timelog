@@ -52,6 +52,26 @@ export function LoginScreen() {
     }
   };
 
+  const forgot = async () => {
+    const email = identifier.trim();
+    if (!email || !looksLikeEmail(email)) {
+      toast.error("Enter your email above, then tap Forgot password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Password reset link sent. Check your inbox.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send reset email.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const google = async () => {
     setBusy(true);
     try {
@@ -100,6 +120,16 @@ export function LoginScreen() {
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {mode === "login" ? "Sign in" : "Sign up"}
           </Button>
+          {mode === "login" && (
+            <button
+              type="button"
+              onClick={forgot}
+              disabled={busy}
+              className="block w-full text-right text-xs text-muted-foreground hover:text-foreground"
+            >
+              Forgot password?
+            </button>
+          )}
         </form>
 
         <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">
