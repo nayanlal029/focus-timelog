@@ -85,6 +85,9 @@ dependencies {
     // Encrypted token storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // User preferences (Pomodoro duration, sleep time, last category)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
     // Ongoing activity + RemoteInputIntentHelper (Wear OS text input)
     implementation("androidx.wear:wear-ongoing:1.0.0")
     implementation("androidx.wear:wear:1.3.0")

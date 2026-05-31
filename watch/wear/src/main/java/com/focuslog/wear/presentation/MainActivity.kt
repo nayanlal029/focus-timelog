@@ -2,13 +2,18 @@ package com.focuslog.wear.presentation
 
 import android.app.Activity
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.wear.ambient.AmbientLifecycleObserver
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
@@ -28,111 +33,185 @@ private object Routes {
 }
 
 class MainActivity : ComponentActivity() {
+
+    // Activity-level ViewModel access (same instance as Compose viewModel())
+    private val timerVm: TimerViewModel by viewModels()
+
+    // Ambient state: mutated by system callback, triggers Compose recomposition
+    private val isAmbientState = mutableStateOf(false)
+
+    private val ambientObserver by lazy {
+        AmbientLifecycleObserver(this, object : AmbientLifecycleObserver.AmbientLifecycleCallback {
+            override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
+                isAmbientState.value = true
+            }
+            override fun onExitAmbient() { isAmbientState.value = false }
+            override fun onUpdateAmbient() {}
+        })
+    }
+
+    private var navController: NavController? = null
+    private var lastStemTap = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { FocusApp() } }
-    }
-}
-
-@Composable
-fun FocusApp(
-    authVm: AuthViewModel = viewModel(),
-    timerVm: TimerViewModel = viewModel(),
-) {
-    val authState by authVm.state.collectAsStateWithLifecycle()
-    val authError by authVm.error.collectAsStateWithLifecycle()
-    val activity = LocalContext.current as Activity
-
-    when (authState) {
-        AuthState.LOADING -> SignInScreen(loading = true, onSignIn = {})
-        AuthState.SIGNED_OUT -> SignInScreen(
-            loading = false,
-            onSignIn = { authVm.signIn(activity) },
-            onEmailSignIn = { email, password -> authVm.signInWithEmail(email, password) },
-            error = authError,
-        )
-        AuthState.SIGNED_IN -> SignedInApp(timerVm)
-    }
-}
-
-@Composable
-private fun SignedInApp(
-    timerVm: TimerViewModel,
-    summaryVm: SummaryViewModel = viewModel(),
-) {
-    val nav = rememberSwipeDismissableNavController()
-    val categories by timerVm.categories.collectAsStateWithLifecycle()
-    val active by timerVm.active.collectAsStateWithLifecycle()
-    val now by timerVm.now.collectAsStateWithLifecycle()
-    val pomodoroEnabled by timerVm.pomodoroEnabled.collectAsStateWithLifecycle()
-
-    SwipeDismissableNavHost(navController = nav, startDestination = Routes.PICKER) {
-
-        composable(Routes.PICKER) {
-            CategoryPickerScreen(
-                categories = categories,
-                runningName = active?.categoryName,
-                pomodoroEnabled = pomodoroEnabled,
-                onResumeRunning = { nav.navigate(Routes.TIMER) },
-                onPick = { category ->
-                    timerVm.startActivity(category)
-                    nav.navigate(Routes.TIMER)
-                },
-                onTogglePomodoro = timerVm::togglePomodoro,
-                onAddCategory = { nav.navigate(Routes.ADD_CATEGORY) },
-                onSummary = { nav.navigate(Routes.SUMMARY) },
-            )
-        }
-
-        composable(Routes.TIMER) {
-            val a = active
-            if (a == null) {
-                nav.popBackStack(Routes.PICKER, inclusive = false)
-            } else {
-                ActiveTimerScreen(
-                    active = a,
-                    now = now,
-                    pomodoroEnabled = pomodoroEnabled,
-                    pomodoroWorkMs = timerVm.pomodoroWorkMs,
-                    alertFlow = timerVm.alert,
-                    onPauseResume = {
-                        if (a.phase == TimerPhase.RUNNING) timerVm.pause() else timerVm.resume()
-                    },
-                    onStop = { nav.navigate(Routes.STOP) },
-                )
+        lifecycle.addObserver(ambientObserver)
+        setContent {
+            MaterialTheme {
+                FocusApp(isAmbient = isAmbientState.value)
             }
         }
+    }
 
-        composable(Routes.STOP) {
-            val a = active
-            if (a == null) {
-                nav.popBackStack(Routes.PICKER, inclusive = false)
-            } else {
-                StopConfirmScreen(
-                    categoryName = a.categoryName,
-                    durationMs = a.focusElapsed(now),
-                    onConfirm = {
-                        timerVm.stop()
-                        nav.popBackStack(Routes.PICKER, inclusive = false)
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        return when (keyCode) {
+            // Crown press or side button — double-tap to start/pause
+            KeyEvent.KEYCODE_STEM_PRIMARY, KeyEvent.KEYCODE_STEM_1 -> {
+                val now = System.currentTimeMillis()
+                if (now - lastStemTap < 400L) {
+                    timerVm.toggleStartPause()
+                    lastStemTap = 0L
+                } else {
+                    lastStemTap = now
+                }
+                true
+            }
+            // Second button — go home
+            KeyEvent.KEYCODE_STEM_2 -> {
+                navController?.navigate(Routes.PICKER) {
+                    popUpTo(Routes.PICKER) { inclusive = true }
+                }
+                true
+            }
+            else -> super.onKeyDown(keyCode, event)
+        }
+    }
+
+    @Composable
+    fun FocusApp(
+        isAmbient: Boolean,
+        authVm: AuthViewModel = viewModel(),
+    ) {
+        val authState by authVm.state.collectAsStateWithLifecycle()
+        val authError by authVm.error.collectAsStateWithLifecycle()
+        val activity = LocalContext.current as Activity
+
+        when (authState) {
+            AuthState.LOADING -> SignInScreen(loading = true, onSignIn = {})
+            AuthState.SIGNED_OUT -> SignInScreen(
+                loading = false,
+                onSignIn = { authVm.signIn(activity) },
+                onEmailSignIn = { email, password -> authVm.signInWithEmail(email, password) },
+                error = authError,
+            )
+            AuthState.SIGNED_IN -> SignedInApp(timerVm, isAmbient)
+        }
+    }
+
+    @Composable
+    private fun SignedInApp(
+        timerVm: TimerViewModel,
+        isAmbient: Boolean,
+        summaryVm: SummaryViewModel = viewModel(),
+    ) {
+        val nav = rememberSwipeDismissableNavController()
+        navController = nav
+
+        val categories     by timerVm.categories.collectAsStateWithLifecycle()
+        val selected       by timerVm.selectedCategory.collectAsStateWithLifecycle()
+        val active         by timerVm.active.collectAsStateWithLifecycle()
+        val now            by timerVm.now.collectAsStateWithLifecycle()
+        val pomodoroEnabled by timerVm.pomodoroEnabled.collectAsStateWithLifecycle()
+        val pomodoroWorkMs  by timerVm.pomodoroWorkMs.collectAsStateWithLifecycle()
+        val pomodoroBreakMs by timerVm.pomodoroBreakMs.collectAsStateWithLifecycle()
+        val pomodoroWorkMin by timerVm.pomodoroWorkMin.collectAsStateWithLifecycle()
+        val pomodoroBreakMin by timerVm.pomodoroBreakMin.collectAsStateWithLifecycle()
+        val sleepAfterSec   by timerVm.sleepAfterSec.collectAsStateWithLifecycle()
+
+        SwipeDismissableNavHost(navController = nav, startDestination = Routes.PICKER) {
+
+            composable(Routes.PICKER) {
+                HomeScreen(
+                    categories = categories,
+                    selected = selected,
+                    active = active,
+                    pomodoroEnabled = pomodoroEnabled,
+                    pomodoroWorkMin = pomodoroWorkMin,
+                    pomodoroBreakMin = pomodoroBreakMin,
+                    sleepAfterSec = sleepAfterSec,
+                    onStart = {
+                        selected?.let { cat ->
+                            timerVm.startActivity(cat)
+                            nav.navigate(Routes.TIMER)
+                        }
+                    },
+                    onSelect = { category ->
+                        timerVm.startActivity(category)
+                        nav.navigate(Routes.TIMER)
+                    },
+                    onResumeRunning = { nav.navigate(Routes.TIMER) },
+                    onAddCategory = { nav.navigate(Routes.ADD_CATEGORY) },
+                    onTogglePomodoro = timerVm::togglePomodoro,
+                    onSummary = { nav.navigate(Routes.SUMMARY) },
+                    onPomodoroWorkChange = timerVm::updatePomodoroWork,
+                    onPomodoroBreakChange = timerVm::updatePomodoroBreak,
+                    onSleepChange = timerVm::updateSleepSec,
+                )
+            }
+
+            composable(Routes.TIMER) {
+                val a = active
+                if (a == null) {
+                    nav.popBackStack(Routes.PICKER, inclusive = false)
+                } else {
+                    ActiveTimerScreen(
+                        active = a,
+                        now = now,
+                        pomodoroEnabled = pomodoroEnabled,
+                        pomodoroWorkMs = pomodoroWorkMs,
+                        pomodoroBreakMs = pomodoroBreakMs,
+                        sleepAfterSec = sleepAfterSec,
+                        isAmbient = isAmbient,
+                        alertFlow = timerVm.alert,
+                        onPauseResume = {
+                            if (a.phase == TimerPhase.RUNNING) timerVm.pause() else timerVm.resume()
+                        },
+                        onStop = { nav.navigate(Routes.STOP) },
+                    )
+                }
+            }
+
+            composable(Routes.STOP) {
+                val a = active
+                if (a == null) {
+                    nav.popBackStack(Routes.PICKER, inclusive = false)
+                } else {
+                    StopConfirmScreen(
+                        categoryName = a.categoryName,
+                        durationMs = a.focusElapsed(now),
+                        onConfirm = {
+                            timerVm.stop()
+                            nav.popBackStack(Routes.PICKER, inclusive = false)
+                        },
+                        onCancel = { nav.popBackStack() },
+                    )
+                }
+            }
+
+            composable(Routes.SUMMARY) {
+                SummaryScreen(vm = summaryVm)
+            }
+
+            composable(Routes.ADD_CATEGORY) {
+                AddCategoryScreen(
+                    saving = false,
+                    onSave = { name, type ->
+                        timerVm.addCategory(name, type)
+                        nav.popBackStack()
                     },
                     onCancel = { nav.popBackStack() },
                 )
             }
-        }
-
-        composable(Routes.SUMMARY) {
-            SummaryScreen(vm = summaryVm)
-        }
-
-        composable(Routes.ADD_CATEGORY) {
-            AddCategoryScreen(
-                saving = false,
-                onSave = { name, type ->
-                    timerVm.addCategory(name, type)
-                    nav.popBackStack()
-                },
-                onCancel = { nav.popBackStack() },
-            )
         }
     }
 }

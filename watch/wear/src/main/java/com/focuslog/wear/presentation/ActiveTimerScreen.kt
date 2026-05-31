@@ -1,11 +1,16 @@
 package com.focuslog.wear.presentation
 
+import android.app.Activity
+import android.view.WindowManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,6 +43,9 @@ fun ActiveTimerScreen(
     now: Long,
     pomodoroEnabled: Boolean,
     pomodoroWorkMs: Long,
+    pomodoroBreakMs: Long,
+    sleepAfterSec: Int,
+    isAmbient: Boolean,
     alertFlow: SharedFlow<WatchAlert>,
     onPauseResume: () -> Unit,
     onStop: () -> Unit,
@@ -44,16 +54,54 @@ fun ActiveTimerScreen(
     val focusMs = active.focusElapsed(now)
     val breakMs = active.breakElapsed(now)
 
+    // Keep screen on for sleepAfterSec, then allow natural sleep
+    val window = (LocalContext.current as? Activity)?.window
+    LaunchedEffect(sleepAfterSec) {
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        kotlinx.coroutines.delay(sleepAfterSec * 1000L)
+        window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+    DisposableEffect(Unit) {
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+
     // Alert dialog state
     var alertMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(alertFlow) {
         alertFlow.collect { alert ->
             alertMessage = when (alert) {
                 WatchAlert.DistractionThreshold -> "5 min break!\nBack to work?"
-                WatchAlert.PomodoroWorkDone -> "25 min done!\nTake a 5 min break."
+                WatchAlert.PomodoroWorkDone -> "${fmtDuration(pomodoroWorkMs)} done!\nTake a break."
                 WatchAlert.PomodoroBreakDone -> "Break over!\nTime to focus."
             }
         }
+    }
+
+    if (isAmbient) {
+        // Minimal ambient display: black bg, white time only
+        val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
+        val displayMs = if (pomodoroEnabled && !paused) remaining else focusMs
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = fmtHMS(displayMs),
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = active.categoryName,
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        return
     }
 
     if (alertMessage != null) {
@@ -84,7 +132,6 @@ fun ActiveTimerScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Category name (color coded)
             Text(
                 text = active.categoryName,
                 color = FocusColors.forType(active.type),
@@ -93,7 +140,6 @@ fun ActiveTimerScreen(
             )
 
             if (pomodoroEnabled && !paused) {
-                // Pomodoro: show countdown remaining
                 val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
                 Text(
                     text = fmtHMS(remaining),
@@ -108,7 +154,6 @@ fun ActiveTimerScreen(
                     color = FocusColors.Neutral,
                 )
             } else {
-                // Normal: show elapsed focus time
                 Text(
                     text = fmtHMS(focusMs),
                     fontFamily = FontFamily.Monospace,
@@ -124,7 +169,6 @@ fun ActiveTimerScreen(
                 }
             }
 
-            // Break / distraction timer (shown while paused)
             if (paused) {
                 Text(
                     text = "Break  ${fmtHMS(breakMs)}",
