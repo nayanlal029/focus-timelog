@@ -105,7 +105,7 @@ fun SignInScreen(
                     onClick = {
                         val ri = RemoteInput.Builder(KEY_EMAIL).setLabel("Email").build()
                         val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
-                        RemoteInputIntentHelper.putRemoteInputsInIntent(intent, listOf(ri))
+                        RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(ri))
                         emailLauncher.launch(intent)
                     },
                 )
@@ -124,7 +124,7 @@ fun SignInScreen(
                     onClick = {
                         val ri = RemoteInput.Builder(KEY_PASSWORD).setLabel("Password").build()
                         val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
-                        RemoteInputIntentHelper.putRemoteInputsInIntent(intent, listOf(ri))
+                        RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(ri))
                         passwordLauncher.launch(intent)
                     },
                 )
