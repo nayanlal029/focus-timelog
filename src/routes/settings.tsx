@@ -170,8 +170,9 @@ function SettingsScreen() {
           </>
         ) : (
           <>
-            <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
-            <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
+            <p className="mb-2 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+            {user && <HandleRow userId={user.id} email={user.email ?? ""} />}
+            <Button variant="outline" className="mt-3 w-full justify-start" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" /> Sign out
             </Button>
           </>
