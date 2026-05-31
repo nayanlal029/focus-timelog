@@ -11,6 +11,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserSession
 
@@ -80,6 +81,20 @@ class AuthManager(context: Context) {
         auth.signInWith(IDToken) {
             idToken = googleCred.idToken
             provider = Google
+        }
+        persistCurrent()
+    }
+
+    /**
+     * Dev/testing sign-in with email + password against the same Supabase project.
+     * Lets us verify the sync round-trip on the Wear OS emulator, which can't do Google
+     * sign-in (no way to add a Google account without a paired phone). Google remains the
+     * production path on a real watch.
+     */
+    suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
+        auth.signInWith(Email) {
+            this.email = email.trim()
+            this.password = password
         }
         persistCurrent()
     }

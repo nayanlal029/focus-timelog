@@ -40,11 +40,17 @@ fun FocusApp(
     timerVm: TimerViewModel = viewModel(),
 ) {
     val authState by authVm.state.collectAsStateWithLifecycle()
+    val authError by authVm.error.collectAsStateWithLifecycle()
     val activity = LocalContext.current as Activity
 
     when (authState) {
         AuthState.LOADING -> SignInScreen(loading = true, onSignIn = {})
-        AuthState.SIGNED_OUT -> SignInScreen(loading = false, onSignIn = { authVm.signIn(activity) })
+        AuthState.SIGNED_OUT -> SignInScreen(
+            loading = false,
+            onSignIn = { authVm.signIn(activity) },
+            onEmailSignIn = { email, password -> authVm.signInWithEmail(email, password) },
+            error = authError,
+        )
         AuthState.SIGNED_IN -> SignedInApp(timerVm)
     }
 }
