@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, BellRing, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -22,6 +22,8 @@ import type { Category } from "@/lib/focuslog/types";
 import {
   loadPomodoro, savePomodoro, loadPauseAlerts, savePauseAlerts, type PomodoroConfig,
 } from "@/lib/focuslog/alerts";
+import { getMyProfile, saveMyHandle, autoClaimHandle, isValidHandle } from "@/lib/focuslog/handle";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "FocusLog — Settings" }] }),
@@ -168,8 +170,9 @@ function SettingsScreen() {
           </>
         ) : (
           <>
-            <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
-            <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
+            <p className="mb-2 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+            {user && <HandleRow userId={user.id} email={user.email ?? ""} />}
+            <Button variant="outline" className="mt-3 w-full justify-start" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" /> Sign out
             </Button>
           </>
@@ -285,5 +288,76 @@ function ExportSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function HandleRow({ userId, email }: { userId: string; email: string }) {
+  const [handle, setHandle] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const p = await getMyProfile(userId);
+      if (cancelled) return;
+      if (p?.handle) {
+        setHandle(p.handle);
+      } else if (email) {
+        const claimed = await autoClaimHandle(userId, email);
+        if (!cancelled && claimed) setHandle(claimed);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, email]);
+
+  const startEdit = () => { setDraft(handle ?? ""); setEditing(true); };
+  const cancel = () => { setEditing(false); setDraft(""); };
+  const save = async () => {
+    const next = draft.trim().toLowerCase();
+    if (!isValidHandle(next)) { toast.error("3–20 chars: a–z, 0–9, _"); return; }
+    if (next === handle) { setEditing(false); return; }
+    setBusy(true);
+    try {
+      await saveMyHandle(userId, email, next);
+      setHandle(next);
+      setEditing(false);
+      toast.success(`User ID updated to @${next}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-sm text-muted-foreground">@</span>
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-8 font-mono text-sm"
+          maxLength={20}
+        />
+        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={save} disabled={busy} aria-label="Save">
+          <Check className="h-4 w-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancel} disabled={busy} aria-label="Cancel">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-sm">{handle ? `@${handle}` : <span className="text-muted-foreground">no handle</span>}</span>
+      <button onClick={startEdit} className="rounded-md p-1 text-muted-foreground hover:text-foreground" aria-label="Edit User ID">
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }
