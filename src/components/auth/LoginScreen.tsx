@@ -7,29 +7,42 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { autoClaimHandle, emailForHandle, looksLikeEmail } from "@/lib/focuslog/handle";
 
 export function LoginScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const { enterGuest } = useAuth();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!identifier || !password) return;
     setBusy(true);
     try {
       if (mode === "login") {
+        let email = identifier.trim();
+        if (!looksLikeEmail(email)) {
+          const resolved = await emailForHandle(email);
+          if (!resolved) throw new Error("No account found for that User ID.");
+          email = resolved;
+        }
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        const email = identifier.trim();
+        if (!looksLikeEmail(email)) throw new Error("Please enter an email address to sign up.");
+        const { data, error } = await supabase.auth.signUp({
           email, password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        toast.success("Account created. You're signed in.");
+        if (data.user) {
+          const h = await autoClaimHandle(data.user.id, email);
+          if (h) toast.success(`Account created. Your User ID is @${h}.`);
+          else toast.success("Account created.");
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
