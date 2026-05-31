@@ -2,7 +2,7 @@ package com.focuslog.wear.presentation
 
 import android.app.Activity
 import android.os.Bundle
-import android.view.KeyEvent
+// import android.view.KeyEvent  // TODO: re-enable when Wear OS allows apps to intercept KEYCODE_STEM_PRIMARY
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.wear.ambient.AmbientLifecycleObserver
@@ -54,7 +53,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var navController: NavController? = null
-    private var lastStemTap = 0L
+    // private var lastStemTap = 0L  // TODO: re-enable with onKeyDown below
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,34 +65,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        return when (keyCode) {
-            // Crown / side button:
-            //   single-tap → start/pause immediately
-            //   double-tap (second tap ≤400ms) → also navigate home
-            KeyEvent.KEYCODE_STEM_PRIMARY, KeyEvent.KEYCODE_STEM_1 -> {
-                val now = System.currentTimeMillis()
-                timerVm.toggleStartPause()
-                if (now - lastStemTap < 400L) {
-                    lastStemTap = 0L
-                    navController?.navigate(Routes.PICKER) {
-                        popUpTo(Routes.PICKER) { inclusive = true }
-                    }
-                } else {
-                    lastStemTap = now
-                }
-                true
-            }
-            // Second button — go home (backup)
-            KeyEvent.KEYCODE_STEM_2 -> {
-                navController?.navigate(Routes.PICKER) {
-                    popUpTo(Routes.PICKER) { inclusive = true }
-                }
-                true
-            }
-            else -> super.onKeyDown(keyCode, event)
-        }
-    }
+    // TODO: Hardware button handling disabled — Wear OS reserves KEYCODE_STEM_PRIMARY at the
+    // system level (takes user to watch home screen). Apps cannot intercept it regardless of
+    // onKeyDown overrides. Re-enable if the platform adds a developer option for this in future.
+    //
+    // override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+    //     return when (keyCode) {
+    //         // Crown / side button:
+    //         //   single-tap → start/pause immediately
+    //         //   double-tap (second tap ≤400ms) → also navigate home
+    //         KeyEvent.KEYCODE_STEM_PRIMARY, KeyEvent.KEYCODE_STEM_1 -> {
+    //             val now = System.currentTimeMillis()
+    //             timerVm.toggleStartPause()
+    //             if (now - lastStemTap < 400L) {
+    //                 lastStemTap = 0L
+    //                 navController?.navigate(Routes.PICKER) {
+    //                     popUpTo(Routes.PICKER) { inclusive = true }
+    //                 }
+    //             } else {
+    //                 lastStemTap = now
+    //             }
+    //             true
+    //         }
+    //         // Second button — go home (backup)
+    //         KeyEvent.KEYCODE_STEM_2 -> {
+    //             navController?.navigate(Routes.PICKER) {
+    //                 popUpTo(Routes.PICKER) { inclusive = true }
+    //             }
+    //             true
+    //         }
+    //         else -> super.onKeyDown(keyCode, event)
+    //     }
+    // }
 
     @Composable
     fun FocusApp(
