@@ -3,6 +3,7 @@ package com.focuslog.wear.presentation
 import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,6 +82,11 @@ fun ActiveTimerScreen(
         java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now))
     }
 
+    // Tap anywhere to toggle minimal mode (timer + clock only, no buttons)
+    // Tapping again, or when screen wakes from ambient, restores the full UI
+    var minimal by remember { mutableStateOf(false) }
+    LaunchedEffect(isAmbient) { if (!isAmbient) minimal = false }
+
     if (isAmbient) {
         // Minimal ambient display: black bg, large white timer, tiny dim clock
         val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
@@ -130,9 +136,40 @@ fun ActiveTimerScreen(
                 style = MaterialTheme.typography.body2
             )
         }
+    } else if (minimal) {
+        // Minimal view: tap anywhere to restore full UI
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { minimal = false },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = wallClock,
+                    color = FocusColors.Neutral,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
+                val displayMs = if (pomodoroEnabled && !paused) remaining else focusMs
+                Text(
+                    text = fmtHMS(displayMs),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 38.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (pomodoroEnabled && !paused && remaining < 60_000L)
+                        FocusColors.Distraction else Color.White,
+                )
+            }
+        }
     } else {
+        // Full UI: tap anywhere outside buttons to go minimal
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp)
+                .clickable { minimal = true },
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
