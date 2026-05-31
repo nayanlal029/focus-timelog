@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Focus</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="sign_in_prompt">Sign in to load your categories</string>
+    <string name="timer_notification_channel">Active timer</string>
+</resources>
