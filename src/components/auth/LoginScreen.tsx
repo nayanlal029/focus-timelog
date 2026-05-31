@@ -81,8 +81,16 @@ export function LoginScreen() {
 
         <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-card p-4">
           <div className="space-y-1">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="identifier">{mode === "login" ? "Email or User ID" : "Email"}</Label>
+            <Input
+              id="identifier"
+              type="text"
+              autoComplete={mode === "login" ? "username" : "email"}
+              required
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder={mode === "login" ? "you@example.com or @handle" : "you@example.com"}
+            />
           </div>
           <div className="space-y-1">
             <Label htmlFor="password">Password</Label>
