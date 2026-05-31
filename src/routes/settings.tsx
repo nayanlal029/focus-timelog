@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, BellRing, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -22,6 +22,8 @@ import type { Category } from "@/lib/focuslog/types";
 import {
   loadPomodoro, savePomodoro, loadPauseAlerts, savePauseAlerts, type PomodoroConfig,
 } from "@/lib/focuslog/alerts";
+import { getMyProfile, saveMyHandle, autoClaimHandle, isValidHandle } from "@/lib/focuslog/handle";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "FocusLog — Settings" }] }),
