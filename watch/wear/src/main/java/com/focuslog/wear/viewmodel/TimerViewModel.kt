@@ -116,6 +116,9 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         settings.recentCategoryIds
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val _isAmbient = MutableStateFlow(false)
+    fun setAmbient(ambient: Boolean) { _isAmbient.value = ambient }
+
     // ── Alerts ────────────────────────────────────────────────────────────────
 
     private val _alert = MutableSharedFlow<WatchAlert>(extraBufferCapacity = 2)
@@ -159,7 +162,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 val now = System.currentTimeMillis()
                 _now.value = now
                 checkAlerts(now)
-                kotlinx.coroutines.delay(1_000)
+                // 15s ticks in ambient saves CPU wake cycles; 1s when screen is active
+                kotlinx.coroutines.delay(if (_isAmbient.value) 15_000L else 1_000L)
             }
         }
     }

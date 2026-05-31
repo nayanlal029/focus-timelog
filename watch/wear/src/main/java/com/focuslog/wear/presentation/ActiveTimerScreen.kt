@@ -77,21 +77,33 @@ fun ActiveTimerScreen(
         }
     }
 
+    val wallClock = remember(now) {
+        java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now))
+    }
+
     if (isAmbient) {
-        // Minimal ambient display: black bg, white time only
+        // Minimal ambient display: black bg, large white timer, tiny dim clock
         val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
         val displayMs = if (pomodoroEnabled && !paused) remaining else focusMs
         Box(
             modifier = Modifier.fillMaxSize().background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = fmtHMS(displayMs),
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = fmtHMS(displayMs),
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = wallClock,
+                    color = Color(0xFF555555),
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
         return
     }
@@ -124,6 +136,12 @@ fun ActiveTimerScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Text(
+                text = wallClock,
+                color = FocusColors.Neutral,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
             Text(
                 text = active.categoryName,
                 color = FocusColors.forType(active.type),

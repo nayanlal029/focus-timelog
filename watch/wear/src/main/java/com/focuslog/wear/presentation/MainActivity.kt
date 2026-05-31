@@ -19,14 +19,12 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import androidx.compose.runtime.LaunchedEffect
 import com.focuslog.wear.viewmodel.AuthState
 import com.focuslog.wear.viewmodel.AuthViewModel
 import com.focuslog.wear.viewmodel.SummaryViewModel
 import com.focuslog.wear.viewmodel.TimerPhase
 import com.focuslog.wear.viewmodel.TimerViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 private object Routes {
     const val PICKER = "picker"
@@ -57,7 +55,6 @@ class MainActivity : ComponentActivity() {
 
     private var navController: NavController? = null
     private var lastStemTap = 0L
-    private var stemJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,23 +69,18 @@ class MainActivity : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         return when (keyCode) {
             // Crown / side button:
-            //   single-tap → start/pause immediately (fires after 400ms debounce)
-            //   double-tap  → go home (cancels pending single-tap action)
+            //   single-tap → start/pause immediately
+            //   double-tap (second tap ≤400ms) → also navigate home
             KeyEvent.KEYCODE_STEM_PRIMARY, KeyEvent.KEYCODE_STEM_1 -> {
                 val now = System.currentTimeMillis()
+                timerVm.toggleStartPause()
                 if (now - lastStemTap < 400L) {
-                    stemJob?.cancel()
                     lastStemTap = 0L
                     navController?.navigate(Routes.PICKER) {
                         popUpTo(Routes.PICKER) { inclusive = true }
                     }
                 } else {
                     lastStemTap = now
-                    stemJob?.cancel()
-                    stemJob = lifecycleScope.launch {
-                        delay(400)
-                        timerVm.toggleStartPause()
-                    }
                 }
                 true
             }
@@ -133,6 +125,8 @@ class MainActivity : ComponentActivity() {
         val nav = rememberSwipeDismissableNavController()
         navController = nav
 
+        LaunchedEffect(isAmbient) { timerVm.setAmbient(isAmbient) }
+
         val categories     by timerVm.categories.collectAsStateWithLifecycle()
         val selected       by timerVm.selectedCategory.collectAsStateWithLifecycle()
         val active         by timerVm.active.collectAsStateWithLifecycle()
@@ -157,6 +151,7 @@ class MainActivity : ComponentActivity() {
                     pomodoroBreakMin = pomodoroBreakMin,
                     sleepAfterSec = sleepAfterSec,
                     recentCategoryIds = recentCategoryIds,
+                    summaryVm = summaryVm,
                     onStart = {
                         selected?.let { cat ->
                             timerVm.startActivity(cat)

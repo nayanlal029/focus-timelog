@@ -7,7 +7,7 @@ import com.focuslog.wear.data.CategoryType
 object FocusColors {
     val Focus = Color(0xFF3B82F6)
     val Distraction = Color(0xFFEF4444)
-    val Neutral = Color(0xFF9CA3AF)
+    val Neutral = Color(0xFFF59E0B)  // amber
 
     fun forType(type: CategoryType): Color = when (type) {
         CategoryType.FOCUS -> Focus

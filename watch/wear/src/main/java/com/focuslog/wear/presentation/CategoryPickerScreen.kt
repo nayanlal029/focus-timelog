@@ -12,6 +12,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
@@ -30,7 +33,10 @@ import androidx.wear.compose.material.ListHeader
 import androidx.wear.compose.material.Text
 import com.focuslog.wear.data.Category
 import com.focuslog.wear.data.CategoryType
+import com.focuslog.wear.util.fmtDuration
 import com.focuslog.wear.viewmodel.Active
+import com.focuslog.wear.viewmodel.SummaryUiState
+import com.focuslog.wear.viewmodel.SummaryViewModel
 
 @Composable
 fun HomeScreen(
@@ -42,6 +48,7 @@ fun HomeScreen(
     pomodoroBreakMin: Int,
     sleepAfterSec: Int,
     recentCategoryIds: List<String>,
+    summaryVm: SummaryViewModel,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
@@ -64,6 +71,7 @@ fun HomeScreen(
                 selected = selected,
                 active = active,
                 recentIds = recentCategoryIds,
+                summaryVm = summaryVm,
                 onStart = onStart,
                 onSelect = onSelect,
                 onResumeRunning = onResumeRunning,
@@ -92,11 +100,15 @@ private fun PlayPage(
     selected: Category?,
     active: Active?,
     recentIds: List<String>,
+    summaryVm: SummaryViewModel,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
     onAddCategory: () -> Unit,
 ) {
+    LaunchedEffect(Unit) { summaryVm.refresh() }
+    val summaryState by summaryVm.state.collectAsStateWithLifecycle()
+
     val sorted = categories.sortedWith(
         compareBy(
             { val pos = recentIds.indexOf(it.id); if (pos == -1) Int.MAX_VALUE else pos },
@@ -113,6 +125,27 @@ private fun PlayPage(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         item { ListHeader { Text("Focus Log") } }
+
+        // Today's stats: focus (green/bold) · distracted (red) · neutral (amber)
+        item {
+            val s = summaryState
+            if (s is SummaryUiState.Ready) {
+                val focusMs = s.items.filter { it.type == CategoryType.FOCUS }.sumOf { it.totalMs }
+                val redMs   = s.items.filter { it.type == CategoryType.DISTRACTION }.sumOf { it.totalMs }
+                val neutMs  = s.items.filter { it.type == CategoryType.NEUTRAL }.sumOf { it.totalMs }
+                if (focusMs > 0L || redMs > 0L || neutMs > 0L) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (focusMs > 0L) Text(fmtDuration(focusMs), color = FocusColors.Focus,       fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        if (redMs  > 0L) Text("  ${fmtDuration(redMs)}",  color = FocusColors.Distraction, fontSize = 11.sp)
+                        if (neutMs > 0L) Text("  ${fmtDuration(neutMs)}", color = FocusColors.Neutral,     fontSize = 11.sp)
+                    }
+                }
+            }
+        }
 
         // Resume running timer (if any)
         if (active != null) {
