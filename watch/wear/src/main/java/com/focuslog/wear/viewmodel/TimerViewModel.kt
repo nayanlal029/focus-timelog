@@ -124,6 +124,26 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private val _isAmbient = MutableStateFlow(false)
     fun setAmbient(ambient: Boolean) { _isAmbient.value = ambient }
 
+    // ── Sync diagnostics ──────────────────────────────────────────────────────
+    // Surfaced on the Settings page so the user can confirm which account they're synced as
+    // and whether any logged blocks are still waiting to upload.
+
+    private val _pendingCount = MutableStateFlow(0)
+    val pendingCount: StateFlow<Int> = _pendingCount.asStateFlow()
+
+    fun signedInEmail(): String? = auth.currentEmail()
+
+    fun retrySync() {
+        viewModelScope.launch {
+            repo.flushPending()
+            refreshPending()
+        }
+    }
+
+    private fun refreshPending() {
+        viewModelScope.launch { _pendingCount.value = repo.pendingCount() }
+    }
+
     // ── Alerts ────────────────────────────────────────────────────────────────
 
     private val _alert = MutableSharedFlow<WatchAlert>(extraBufferCapacity = 2)
@@ -162,6 +182,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+
+        refreshPending()
 
         viewModelScope.launch {
             while (true) {
@@ -292,7 +314,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         val activityEnd = a.breakStartedAt ?: now
         if (a.breakStartedAt != null) queuePauseBlocks(a.breakStartedAt, now)
 
-        val userId = auth.currentUserId()
+        val userId = auth.lastKnownUserId()
         if (userId != null) {
             viewModelScope.launch {
                 repo.saveBlock(
@@ -307,6 +329,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                         isBreak = false,
                     )
                 )
+                refreshPending()
             }
         }
         clearActive()
@@ -362,7 +385,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         isBreak: Boolean,
     ) {
         if (end <= start) return
-        val userId = auth.currentUserId() ?: return
+        val userId = auth.lastKnownUserId() ?: return
         viewModelScope.launch {
             repo.saveBlock(
                 TimeBlockInsert(
@@ -376,6 +399,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                     isBreak = isBreak,
                 )
             )
+            refreshPending()
         }
     }
 

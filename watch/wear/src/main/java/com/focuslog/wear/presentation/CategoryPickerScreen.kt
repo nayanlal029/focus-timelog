@@ -50,12 +50,15 @@ fun HomeScreen(
     sleepAfterSec: Int,
     recentCategoryIds: List<String>,
     summaryVm: SummaryViewModel,
+    signedInEmail: String?,
+    pendingCount: Int,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
     onAddCategory: () -> Unit,
     onTogglePomodoro: () -> Unit,
     onSummary: () -> Unit,
+    onRetrySync: () -> Unit,
     onPomodoroWorkChange: (Int) -> Unit,
     onPomodoroBreakChange: (Int) -> Unit,
     onSleepChange: (Int) -> Unit,
@@ -84,8 +87,11 @@ fun HomeScreen(
                 pomodoroWorkMin = pomodoroWorkMin,
                 pomodoroBreakMin = pomodoroBreakMin,
                 sleepAfterSec = sleepAfterSec,
+                signedInEmail = signedInEmail,
+                pendingCount = pendingCount,
                 onTogglePomodoro = onTogglePomodoro,
                 onSummary = onSummary,
+                onRetrySync = onRetrySync,
                 onPomodoroWorkChange = onPomodoroWorkChange,
                 onPomodoroBreakChange = onPomodoroBreakChange,
                 onSleepChange = onSleepChange,
@@ -244,8 +250,11 @@ private fun SettingsPage(
     pomodoroWorkMin: Int,
     pomodoroBreakMin: Int,
     sleepAfterSec: Int,
+    signedInEmail: String?,
+    pendingCount: Int,
     onTogglePomodoro: () -> Unit,
     onSummary: () -> Unit,
+    onRetrySync: () -> Unit,
     onPomodoroWorkChange: (Int) -> Unit,
     onPomodoroBreakChange: (Int) -> Unit,
     onSleepChange: (Int) -> Unit,
@@ -307,6 +316,29 @@ private fun SettingsPage(
                 label = { Text("📊 Focus Summary") },
                 colors = ChipDefaults.secondaryChipColors(),
                 onClick = onSummary,
+            )
+        }
+
+        // ── Sync diagnostics ────────────────────────────────────────────────
+        item { ListHeader { Text("Sync") } }
+
+        item {
+            Text(
+                text = signedInEmail?.let { "Account:\n$it" } ?: "Not signed in",
+                fontSize = 11.sp,
+                color = FocusColors.Neutral,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            )
+        }
+
+        item {
+            val label = if (pendingCount > 0) "⟳ Sync now ($pendingCount waiting)" else "✓ All synced"
+            Chip(
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(label) },
+                colors = if (pendingCount > 0) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
+                onClick = onRetrySync,
             )
         }
     }

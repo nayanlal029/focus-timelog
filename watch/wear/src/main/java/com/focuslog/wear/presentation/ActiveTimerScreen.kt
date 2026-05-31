@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -134,13 +135,25 @@ fun ActiveTimerScreen(
                 Button(
                     onClick = { alertMessage = null },
                     colors = ButtonDefaults.secondaryButtonColors(),
-                ) { Text("OK") }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "Dismiss",
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             },
             positiveButton = {
                 Button(
                     onClick = { alertMessage = null; onPauseResume() },
                     colors = ButtonDefaults.primaryButtonColors(),
-                ) { Text(if (paused) "Resume" else "Pause") }
+                ) {
+                    Icon(
+                        imageVector = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        contentDescription = if (paused) "Resume" else "Pause",
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             },
         ) {
             Text(

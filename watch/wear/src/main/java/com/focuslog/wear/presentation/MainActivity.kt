@@ -141,6 +141,8 @@ class MainActivity : ComponentActivity() {
         val pomodoroBreakMin by timerVm.pomodoroBreakMin.collectAsStateWithLifecycle()
         val sleepAfterSec    by timerVm.sleepAfterSec.collectAsStateWithLifecycle()
         val recentCategoryIds by timerVm.recentCategoryIds.collectAsStateWithLifecycle()
+        val pendingCount by timerVm.pendingCount.collectAsStateWithLifecycle()
+        val signedInEmail = timerVm.signedInEmail()
 
         SwipeDismissableNavHost(navController = nav, startDestination = Routes.PICKER) {
 
@@ -155,6 +157,8 @@ class MainActivity : ComponentActivity() {
                     sleepAfterSec = sleepAfterSec,
                     recentCategoryIds = recentCategoryIds,
                     summaryVm = summaryVm,
+                    signedInEmail = signedInEmail,
+                    pendingCount = pendingCount,
                     onStart = {
                         selected?.let { cat ->
                             timerVm.startActivity(cat)
@@ -168,7 +172,8 @@ class MainActivity : ComponentActivity() {
                     onResumeRunning = { nav.navigate(Routes.TIMER) },
                     onAddCategory = { nav.navigate(Routes.ADD_CATEGORY) },
                     onTogglePomodoro = timerVm::togglePomodoro,
-                    onSummary = { nav.navigate(Routes.SUMMARY) },
+                    onSummary = { nav.navigate(Routes.DAY_SUMMARY) },
+                    onRetrySync = timerVm::retrySync,
                     onPomodoroWorkChange = timerVm::updatePomodoroWork,
                     onPomodoroBreakChange = timerVm::updatePomodoroBreak,
                     onSleepChange = timerVm::updateSleepSec,
