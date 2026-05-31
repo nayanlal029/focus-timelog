@@ -88,6 +88,7 @@ dependencies {
     // Ongoing activity + RemoteInputIntentHelper (Wear OS text input)
     implementation("androidx.wear:wear-ongoing:1.0.0")
     implementation("androidx.wear:wear:1.3.0")
+    implementation("androidx.wear:wear-input:1.2.0")
 
     // Tile (one-tap start/stop glance surface)
     implementation("androidx.wear.tiles:tiles:1.4.0")

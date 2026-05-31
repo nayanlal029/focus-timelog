@@ -32,6 +32,7 @@ fun StopConfirmScreen(
                 colors = ButtonDefaults.primaryButtonColors(),
             ) { Text("Yes") }
         },
-        message = { Text("Duration: ${fmtDuration(durationMs)}") },
-    )
+    ) {
+        Text("Duration: ${fmtDuration(durationMs)}")
+    }
 }

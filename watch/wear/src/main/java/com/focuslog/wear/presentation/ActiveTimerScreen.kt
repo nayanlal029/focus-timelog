@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
+import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.dialog.Alert
 import com.focuslog.wear.util.fmtDuration
@@ -70,8 +71,13 @@ fun ActiveTimerScreen(
                     colors = ButtonDefaults.primaryButtonColors(),
                 ) { Text(if (paused) "Resume" else "Pause") }
             },
-            message = { Text(alertMessage ?: "", textAlign = TextAlign.Center) },
-        )
+        ) {
+            Text(
+                text = alertMessage ?: "",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.body2
+            )
+        }
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),

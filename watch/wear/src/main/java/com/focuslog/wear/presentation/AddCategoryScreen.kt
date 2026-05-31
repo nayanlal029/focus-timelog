@@ -66,7 +66,7 @@ fun AddCategoryScreen(
                         .setLabel("Category name")
                         .build()
                     val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
-                    RemoteInputIntentHelper.putRemoteInputsInIntent(intent, listOf(remoteInput))
+                    RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
                     inputLauncher.launch(intent)
                 },
             )
