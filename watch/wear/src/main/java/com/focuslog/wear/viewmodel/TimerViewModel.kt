@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.focuslog.wear.auth.AuthManager
 import com.focuslog.wear.data.BREAK_CATEGORY_ID
 import com.focuslog.wear.data.BREAK_CATEGORY_NAME
+import com.focuslog.wear.data.DISTRACTION_CATEGORY_ID
+import com.focuslog.wear.data.DISTRACTION_CATEGORY_NAME
 import com.focuslog.wear.data.Category
 import com.focuslog.wear.data.CategoryType
 import com.focuslog.wear.data.SupabaseRepository
@@ -41,6 +43,8 @@ data class Active(
     val runningSince: Long?,
     val breakStartedAt: Long?,
     val accumulatedBreakMs: Long,
+    /** focusElapsed value at the start of the current Pomodoro work cycle (countdown baseline). */
+    val pomodoroWorkBaseMs: Long = 0,
 ) {
     val phase: TimerPhase get() = if (runningSince != null) TimerPhase.RUNNING else TimerPhase.PAUSED
 
@@ -141,6 +145,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                     runningSince = e.runningSince,
                     breakStartedAt = e.breakStartedAt,
                     accumulatedBreakMs = e.accumulatedBreakMs,
+                    pomodoroWorkBaseMs = e.pomodoroWorkBaseMs,
                 )
             }
         }
@@ -178,17 +183,17 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
         if (a.phase == TimerPhase.PAUSED) {
             val breakMs = a.breakElapsed(now)
-            // Distraction threshold (non-Pomodoro)
-            if (!distractionAlerted && breakMs >= distractionThresholdMs) {
+            // Distraction threshold (non-Pomodoro manual pause)
+            if (!_pomodoroEnabled.value && !distractionAlerted && breakMs >= distractionThresholdMs) {
                 distractionAlerted = true
                 _alert.tryEmit(WatchAlert.DistractionThreshold)
                 vibrate()
             }
-            // Pomodoro break done
+            // Pomodoro break done → vibrate 3× and start counting overflow as distraction
             if (_pomodoroEnabled.value && !pomodoroBreakAlerted && breakMs >= pomodoroBreakMs.value) {
                 pomodoroBreakAlerted = true
                 _alert.tryEmit(WatchAlert.PomodoroBreakDone)
-                vibrate()
+                vibrateTimes(3)
             }
         } else {
             distractionAlerted = false
@@ -196,11 +201,14 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         if (_pomodoroEnabled.value && a.phase == TimerPhase.RUNNING) {
-            val focus = a.focusElapsed(now)
-            if (!pomodoroWorkAlerted && focus >= pomodoroWorkMs.value) {
+            // Per-cycle countdown: only the focus accrued since this cycle began counts.
+            val cycleFocus = a.focusElapsed(now) - a.pomodoroWorkBaseMs
+            if (!pomodoroWorkAlerted && cycleFocus >= pomodoroWorkMs.value) {
                 pomodoroWorkAlerted = true
                 _alert.tryEmit(WatchAlert.PomodoroWorkDone)
                 vibrate()
+                // Auto-start the break (enters PAUSED, same mechanics as a manual pause)
+                pause()
             }
         } else if (a.phase == TimerPhase.PAUSED) {
             pomodoroWorkAlerted = false
@@ -253,12 +261,20 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         if (a.phase != TimerPhase.PAUSED) return
         val now = System.currentTimeMillis()
         val breakStart = a.breakStartedAt ?: now
-        queueBreakBlock(breakStart, now)
-        _active.value = a.copy(
+        queuePauseBlocks(breakStart, now)
+        val resumed = a.copy(
             runningSince = now,
             breakStartedAt = null,
             accumulatedBreakMs = a.accumulatedBreakMs + (now - breakStart),
         )
+        // Under Pomodoro, resuming starts a fresh work cycle: rebase the countdown to "now" so the
+        // next 25-min session counts from zero, and re-arm the work alert.
+        _active.value = if (_pomodoroEnabled.value) {
+            pomodoroWorkAlerted = false
+            resumed.copy(pomodoroWorkBaseMs = resumed.focusElapsed(now))
+        } else {
+            resumed
+        }
         distractionAlerted = false
         pomodoroBreakAlerted = false
         persist()
@@ -268,7 +284,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         val a = _active.value ?: return
         val now = System.currentTimeMillis()
         val activityEnd = a.breakStartedAt ?: now
-        if (a.breakStartedAt != null) queueBreakBlock(a.breakStartedAt, now)
+        if (a.breakStartedAt != null) queuePauseBlocks(a.breakStartedAt, now)
 
         val userId = auth.currentUserId()
         if (userId != null) {
@@ -314,7 +330,31 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    private fun queueBreakBlock(start: Long, end: Long) {
+    /**
+     * Log the time spent in a pause. Normally one neutral "Break" block. Under Pomodoro, time past
+     * the configured break window is split off as a separate **distraction** block so overflow
+     * (ignoring the "get back to focus" nudge) is counted honestly.
+     */
+    private fun queuePauseBlocks(start: Long, end: Long) {
+        if (end <= start) return
+        val breakWindow = pomodoroBreakMs.value
+        if (_pomodoroEnabled.value && (end - start) > breakWindow) {
+            val breakEnd = start + breakWindow
+            queueBlock(BREAK_CATEGORY_ID, BREAK_CATEGORY_NAME, CategoryType.NEUTRAL, start, breakEnd, isBreak = true)
+            queueBlock(DISTRACTION_CATEGORY_ID, DISTRACTION_CATEGORY_NAME, CategoryType.DISTRACTION, breakEnd, end, isBreak = false)
+        } else {
+            queueBlock(BREAK_CATEGORY_ID, BREAK_CATEGORY_NAME, CategoryType.NEUTRAL, start, end, isBreak = true)
+        }
+    }
+
+    private fun queueBlock(
+        categoryId: String,
+        categoryName: String,
+        type: CategoryType,
+        start: Long,
+        end: Long,
+        isBreak: Boolean,
+    ) {
         if (end <= start) return
         val userId = auth.currentUserId() ?: return
         viewModelScope.launch {
@@ -322,12 +362,12 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 TimeBlockInsert(
                     id = UUID.randomUUID().toString(),
                     userId = userId,
-                    categoryId = BREAK_CATEGORY_ID,
-                    categoryName = BREAK_CATEGORY_NAME,
-                    type = CategoryType.NEUTRAL.wire,
+                    categoryId = categoryId,
+                    categoryName = categoryName,
+                    type = type.wire,
                     startMs = start,
                     endMs = end,
-                    isBreak = true,
+                    isBreak = isBreak,
                 )
             )
         }
@@ -355,6 +395,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                     runningSince = a.runningSince,
                     breakStartedAt = a.breakStartedAt,
                     accumulatedBreakMs = a.accumulatedBreakMs,
+                    pomodoroWorkBaseMs = a.pomodoroWorkBaseMs,
                 )
             )
         }
@@ -367,6 +408,20 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vm.defaultVibrator.vibrate(
                 VibrationEffect.createWaveform(longArrayOf(0, 300, 100, 300), -1)
+            )
+        }
+    }
+
+    /** N spaced pulses — used to insistently nudge the user (e.g. Pomodoro break over). */
+    private fun vibrateTimes(count: Int) {
+        runCatching {
+            val pattern = ArrayList<Long>()
+            pattern.add(0L)
+            repeat(count) { pattern.add(400L); pattern.add(250L) }
+            val vm = getApplication<Application>()
+                .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vm.defaultVibrator.vibrate(
+                VibrationEffect.createWaveform(pattern.toLongArray(), -1)
             )
         }
     }

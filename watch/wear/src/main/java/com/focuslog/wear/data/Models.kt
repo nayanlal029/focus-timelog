@@ -17,6 +17,10 @@ enum class CategoryType(val wire: String) {
 const val BREAK_CATEGORY_ID = "__break__"
 const val BREAK_CATEGORY_NAME = "Break"
 
+// Pomodoro overflow: time spent past the break window is logged as distraction.
+const val DISTRACTION_CATEGORY_ID = "__distraction__"
+const val DISTRACTION_CATEGORY_NAME = "Distraction"
+
 data class Category(
     val id: String,
     val name: String,

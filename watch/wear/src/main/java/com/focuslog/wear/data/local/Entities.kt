@@ -45,4 +45,6 @@ data class ActiveStateEntity(
     val runningSince: Long?,
     val breakStartedAt: Long?,
     val accumulatedBreakMs: Long,
+    /** focusElapsed value at the start of the current Pomodoro work cycle (countdown baseline). */
+    val pomodoroWorkBaseMs: Long = 0,
 )

@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [CategoryEntity::class, PendingBlockEntity::class, ActiveStateEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class WatchDatabase : RoomDatabase() {
@@ -24,7 +24,10 @@ abstract class WatchDatabase : RoomDatabase() {
                     context.applicationContext,
                     WatchDatabase::class.java,
                     "focuslog.db",
-                ).build().also { instance = it }
+                )
+                    // active_state is transient local-only timer state; safe to wipe on schema bump
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }

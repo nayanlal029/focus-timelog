@@ -3,14 +3,18 @@ package com.focuslog.wear.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.wear.ongoing.OngoingActivity
+import androidx.wear.ongoing.Status
 import com.focuslog.wear.R
 import com.focuslog.wear.data.local.WatchDatabase
+import com.focuslog.wear.presentation.MainActivity
 import com.focuslog.wear.util.fmtHMS
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,14 +59,35 @@ class TimerForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun buildNotification(title: String, elapsedMs: Long): Notification =
-        NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun buildNotification(title: String, elapsedMs: Long): Notification {
+        // Tapping the ongoing chip / notification jumps straight back into the running timer.
+        val launchIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(
+            this, 0, launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer)
             .setContentTitle(title)
             .setContentText(fmtHMS(elapsedMs))
             .setOngoing(true)
             .setSilent(true)
+            .setContentIntent(pending)
+
+        // OngoingActivity surfaces the live timer on the watch face / ongoing chip, so it stays
+        // visible and one tap away even when the user leaves the app or returns to the watch home.
+        OngoingActivity.Builder(applicationContext, NOTIF_ID, builder)
+            .setStaticIcon(R.drawable.ic_timer)
+            .setTouchIntent(pending)
+            .setStatus(Status.Builder().addTemplate(title).build())
             .build()
+            .apply(applicationContext)
+
+        return builder.build()
+    }
 
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

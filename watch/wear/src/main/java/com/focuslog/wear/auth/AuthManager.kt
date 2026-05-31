@@ -7,7 +7,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.focuslog.wear.BuildConfig
 import com.focuslog.wear.data.SupabaseProvider
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
@@ -72,12 +72,14 @@ class AuthManager(context: Context) {
      * On Wear OS the user taps "Sign in with Google" → watch shows the account picker → done.
      */
     suspend fun signInWithGoogle(activity: Activity): Result<Unit> = runCatching {
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-            .setFilterByAuthorizedAccounts(false)
+        // GetSignInWithGoogleOption drives the explicit "Sign in with Google" button flow: it
+        // always surfaces the account chooser (and add-account) even when no Google credential is
+        // present yet. GetGoogleIdOption, by contrast, silently throws NoCredentialException when
+        // there are no authorized accounts — which is why the picker never appeared.
+        val googleOption = GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID)
             .build()
         val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
+            .addCredentialOption(googleOption)
             .build()
 
         val response = CredentialManager.create(activity)

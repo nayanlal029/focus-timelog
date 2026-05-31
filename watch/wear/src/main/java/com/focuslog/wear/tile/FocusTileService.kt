@@ -27,7 +27,9 @@ class FocusTileService : TileService() {
     override fun onTileRequest(
         requestParams: RequestBuilders.TileRequest
     ): ListenableFuture<TileBuilders.Tile> {
-        val active = runBlocking { WatchDatabase.get(this@FocusTileService).activeStateDao().get() }
+        val active = runCatching {
+            runBlocking { WatchDatabase.get(this@FocusTileService).activeStateDao().get() }
+        }.getOrNull()
         val headline = active?.let { "Running: ${it.categoryName}" } ?: "Focus"
         val cta = if (active != null) "Open" else "Tap to log"
 

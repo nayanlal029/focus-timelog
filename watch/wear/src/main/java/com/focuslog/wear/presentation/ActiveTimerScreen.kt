@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
+import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.dialog.Alert
@@ -54,6 +60,13 @@ fun ActiveTimerScreen(
     val paused = active.phase == TimerPhase.PAUSED
     val focusMs = active.focusElapsed(now)
     val breakMs = active.breakElapsed(now)
+
+    // Pomodoro: countdown is per-cycle (rebased on each Resume Focus). Break counts down too; once
+    // it overflows the configured window, the extra time is "distraction".
+    val cycleFocusMs = (focusMs - active.pomodoroWorkBaseMs).coerceAtLeast(0)
+    val workRemaining = (pomodoroWorkMs - cycleFocusMs).coerceAtLeast(0)
+    val breakRemaining = pomodoroBreakMs - breakMs            // negative once break is over
+    val distractionOverflow = (breakMs - pomodoroBreakMs).coerceAtLeast(0)
 
     // Keep screen on for sleepAfterSec, then allow natural sleep
     val window = (LocalContext.current as? Activity)?.window
@@ -89,8 +102,11 @@ fun ActiveTimerScreen(
 
     if (isAmbient) {
         // Minimal ambient display: black bg, large white timer, tiny dim clock
-        val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
-        val displayMs = if (pomodoroEnabled && !paused) remaining else focusMs
+        val displayMs = when {
+            pomodoroEnabled && !paused -> workRemaining
+            pomodoroEnabled && paused  -> breakRemaining.coerceAtLeast(0)
+            else                       -> focusMs
+        }
         Box(
             modifier = Modifier.fillMaxSize().background(Color.Black),
             contentAlignment = Alignment.Center,
@@ -151,14 +167,17 @@ fun ActiveTimerScreen(
                     fontSize = 11.sp,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
-                val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
-                val displayMs = if (pomodoroEnabled && !paused) remaining else focusMs
+                val displayMs = when {
+                    pomodoroEnabled && !paused -> workRemaining
+                    pomodoroEnabled && paused  -> breakRemaining.coerceAtLeast(0)
+                    else                       -> focusMs
+                }
                 Text(
                     text = fmtHMS(displayMs),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 38.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (pomodoroEnabled && !paused && remaining < 60_000L)
+                    color = if (pomodoroEnabled && !paused && workRemaining < 60_000L)
                         FocusColors.Distraction else Color.White,
                 )
             }
@@ -186,20 +205,37 @@ fun ActiveTimerScreen(
                 fontSize = 14.sp,
             )
 
-            if (pomodoroEnabled && !paused) {
-                val remaining = (pomodoroWorkMs - focusMs).coerceAtLeast(0)
+            if (pomodoroEnabled && paused) {
+                // Pomodoro break: count the break window down; once it's spent, the overflow is
+                // distraction (red, counting up).
+                if (breakRemaining > 0L) {
+                    Text(
+                        text = fmtHMS(breakRemaining),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FocusColors.Neutral,
+                    )
+                    Text(text = "☕ break", fontSize = 11.sp, color = FocusColors.Neutral)
+                } else {
+                    Text(
+                        text = fmtHMS(distractionOverflow),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FocusColors.Distraction,
+                    )
+                    Text(text = "⚠ distraction", fontSize = 11.sp, color = FocusColors.Distraction)
+                }
+            } else if (pomodoroEnabled && !paused) {
                 Text(
-                    text = fmtHMS(remaining),
+                    text = fmtHMS(workRemaining),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (remaining < 60_000L) FocusColors.Distraction else FocusColors.Focus,
+                    color = if (workRemaining < 60_000L) FocusColors.Distraction else FocusColors.Focus,
                 )
-                Text(
-                    text = "🍅 remaining",
-                    fontSize = 11.sp,
-                    color = FocusColors.Neutral,
-                )
+                Text(text = "🍅 remaining", fontSize = 11.sp, color = FocusColors.Neutral)
             } else {
                 Text(
                     text = fmtHMS(focusMs),
@@ -207,23 +243,15 @@ fun ActiveTimerScreen(
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                if (pomodoroEnabled) {
+                if (paused) {
                     Text(
-                        text = "🍅 ${fmtDuration(pomodoroWorkMs)} session",
-                        fontSize = 11.sp,
-                        color = FocusColors.Neutral,
+                        text = "Break  ${fmtHMS(breakMs)}",
+                        color = FocusColors.Distraction,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
-            }
-
-            if (paused) {
-                Text(
-                    text = "Break  ${fmtHMS(breakMs)}",
-                    color = FocusColors.Distraction,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
             }
 
             Row(
@@ -233,12 +261,26 @@ fun ActiveTimerScreen(
                 Button(
                     onClick = onPauseResume,
                     colors = ButtonDefaults.secondaryButtonColors(),
-                ) { Text(if (paused) "Resume" else "Pause") }
+                ) {
+                    Icon(
+                        imageVector = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        contentDescription = if (paused) {
+                            if (pomodoroEnabled) "Resume focus" else "Resume"
+                        } else "Pause",
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
 
                 Button(
                     onClick = onStop,
                     colors = ButtonDefaults.primaryButtonColors(),
-                ) { Text("Stop") }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Stop,
+                        contentDescription = "Stop",
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
     }
