@@ -3,6 +3,7 @@ package com.focuslog.wear.auth
 import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.focuslog.wear.BuildConfig
@@ -14,6 +15,8 @@ import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserSession
+import java.security.MessageDigest
+import java.util.UUID
 
 /**
  * Handles one-time Google sign-in and session restoration.
@@ -71,7 +74,7 @@ class AuthManager(context: Context) {
      * Launch the Google credential picker. MUST be called from a live Activity context.
      * On Wear OS the user taps "Sign in with Google" → watch shows the account picker → done.
      */
-    suspend fun signInWithGoogle(activity: Activity): Result<Unit> = runCatching {
+    suspend fun signInWithGoogle(activity: Activity): Result<Unit> = runCatching<Unit> {
         val clientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
         // Fail loudly if secrets.properties wasn't picked up (it must live at watch/secrets.properties,
         // the Gradle root) — otherwise the build silently uses placeholder values and sign-in can
