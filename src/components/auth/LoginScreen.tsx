@@ -52,6 +52,26 @@ export function LoginScreen() {
     }
   };
 
+  const forgot = async () => {
+    const email = identifier.trim();
+    if (!email || !looksLikeEmail(email)) {
+      toast.error("Enter your email above, then tap Forgot password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Password reset link sent. Check your inbox.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send reset email.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const google = async () => {
     setBusy(true);
     try {
