@@ -60,6 +60,12 @@ data class TimeBlockInsert(
     @SerialName("is_break") val isBreak: Boolean = false,
 )
 
+@Serializable
+data class UserProfile(
+    val email: String,
+    val handle: String,
+)
+
 /** Read-only shape for summary queries — only columns we aggregate over. */
 @Serializable
 data class TimeBlockRow(

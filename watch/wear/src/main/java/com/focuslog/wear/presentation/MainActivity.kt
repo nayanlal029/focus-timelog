@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 loading = false,
                 onSignIn = { authVm.signIn(activity) },
                 onEmailSignIn = { email, password -> authVm.signInWithEmail(email, password) },
+                onHandleSignIn = { handle, password -> authVm.signInWithHandle(handle, password) },
                 error = authError,
             )
             AuthState.SIGNED_IN -> SignedInApp(timerVm, isAmbient)
@@ -142,6 +143,7 @@ class MainActivity : ComponentActivity() {
         val sleepAfterSec    by timerVm.sleepAfterSec.collectAsStateWithLifecycle()
         val recentCategoryIds by timerVm.recentCategoryIds.collectAsStateWithLifecycle()
         val pendingCount by timerVm.pendingCount.collectAsStateWithLifecycle()
+        val handle by timerVm.handle.collectAsStateWithLifecycle()
         val signedInEmail = timerVm.signedInEmail()
 
         SwipeDismissableNavHost(navController = nav, startDestination = Routes.PICKER) {
@@ -158,6 +160,7 @@ class MainActivity : ComponentActivity() {
                     recentCategoryIds = recentCategoryIds,
                     summaryVm = summaryVm,
                     signedInEmail = signedInEmail,
+                    signedInHandle = handle,
                     pendingCount = pendingCount,
                     onStart = {
                         selected?.let { cat ->

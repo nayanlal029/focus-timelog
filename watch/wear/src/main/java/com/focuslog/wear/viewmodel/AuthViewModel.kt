@@ -58,5 +58,20 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Production path on watch: sign in with short handle + password. */
+    fun signInWithHandle(handle: String, password: String) {
+        _state.value = AuthState.LOADING
+        _error.value = null
+        viewModelScope.launch {
+            val result = auth.signInWithHandle(handle, password)
+            if (result.isSuccess) {
+                _state.value = AuthState.SIGNED_IN
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Sign-in failed"
+                _state.value = AuthState.SIGNED_OUT
+            }
+        }
+    }
+
     fun clearError() { _error.value = null }
 }

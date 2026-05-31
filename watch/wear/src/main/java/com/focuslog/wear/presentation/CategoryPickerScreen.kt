@@ -51,6 +51,7 @@ fun HomeScreen(
     recentCategoryIds: List<String>,
     summaryVm: SummaryViewModel,
     signedInEmail: String?,
+    signedInHandle: String?,
     pendingCount: Int,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
@@ -88,6 +89,7 @@ fun HomeScreen(
                 pomodoroBreakMin = pomodoroBreakMin,
                 sleepAfterSec = sleepAfterSec,
                 signedInEmail = signedInEmail,
+                signedInHandle = signedInHandle,
                 pendingCount = pendingCount,
                 onTogglePomodoro = onTogglePomodoro,
                 onSummary = onSummary,
@@ -251,6 +253,7 @@ private fun SettingsPage(
     pomodoroBreakMin: Int,
     sleepAfterSec: Int,
     signedInEmail: String?,
+    signedInHandle: String?,
     pendingCount: Int,
     onTogglePomodoro: () -> Unit,
     onSummary: () -> Unit,
@@ -327,6 +330,17 @@ private fun SettingsPage(
                 text = signedInEmail?.let { "Account:\n$it" } ?: "Not signed in",
                 fontSize = 11.sp,
                 color = FocusColors.Neutral,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            )
+        }
+
+        item {
+            Text(
+                text = signedInHandle?.let { "ID: $it" } ?: "",
+                fontSize = 14.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                color = FocusColors.Focus,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             )

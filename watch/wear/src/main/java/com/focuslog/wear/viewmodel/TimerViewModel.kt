@@ -131,7 +131,11 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private val _pendingCount = MutableStateFlow(0)
     val pendingCount: StateFlow<Int> = _pendingCount.asStateFlow()
 
+    private val _handle = MutableStateFlow<String?>(null)
+    val handle: StateFlow<String?> = _handle.asStateFlow()
+
     fun signedInEmail(): String? = auth.currentEmail()
+    fun signedInHandle(): String? = _handle.value
 
     fun retrySync() {
         viewModelScope.launch {
@@ -156,6 +160,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private var pomodoroBreakAlerted = false
 
     init {
+        viewModelScope.launch { _handle.value = auth.fetchHandle() }
         viewModelScope.launch {
             db.activeStateDao().get()?.let { e ->
                 _active.value = Active(

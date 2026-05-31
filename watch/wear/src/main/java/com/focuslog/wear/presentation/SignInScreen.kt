@@ -26,7 +26,7 @@ import androidx.wear.compose.material.ListHeader
 import androidx.wear.compose.material.Text
 import androidx.wear.input.RemoteInputIntentHelper
 
-private const val KEY_EMAIL = "email"
+private const val KEY_IDENTIFIER = "identifier"
 private const val KEY_PASSWORD = "password"
 
 @Composable
@@ -34,17 +34,19 @@ fun SignInScreen(
     loading: Boolean,
     onSignIn: () -> Unit,
     onEmailSignIn: (email: String, password: String) -> Unit = { _, _ -> },
+    onHandleSignIn: (handle: String, password: String) -> Unit = { _, _ -> },
     error: String? = null,
 ) {
     val listState = rememberScalingLazyListState()
-    var email by remember { mutableStateOf("") }
+    var useHandle by remember { mutableStateOf(true) } // User ID mode is now the default
+    var identifier by remember { mutableStateOf("") }  // email or handle depending on mode
     var password by remember { mutableStateOf("") }
 
-    val emailLauncher = rememberLauncherForActivityResult(
+    val identifierLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val bundle = RemoteInput.getResultsFromIntent(result.data ?: return@rememberLauncherForActivityResult)
-        email = bundle?.getCharSequence(KEY_EMAIL)?.toString() ?: email
+        identifier = bundle?.getCharSequence(KEY_IDENTIFIER)?.toString() ?: identifier
     }
     val passwordLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -71,45 +73,52 @@ fun SignInScreen(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
+
+            // ── Mode toggle: User ID / Email ───────────────────────────────
             item {
-                Button(
-                    onClick = onSignIn,
+                androidx.compose.foundation.layout.Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    colors = ButtonDefaults.primaryButtonColors(),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("Sign in with Google")
+                    Chip(
+                        modifier = Modifier.weight(1f),
+                        label = { Text("User ID", fontSize = 11.sp) },
+                        colors = if (useHandle) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
+                        onClick = { useHandle = true; identifier = "" },
+                    )
+                    Chip(
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Email", fontSize = 11.sp) },
+                        colors = if (!useHandle) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
+                        onClick = { useHandle = false; identifier = "" },
+                    )
                 }
             }
 
-            // --- Email/password fallback (works on the emulator, no Google account needed) ---
+            // ── Identifier chip ────────────────────────────────────────────
             item {
-                Text(
-                    text = "or use email",
-                    fontSize = 11.sp,
-                    color = FocusColors.Neutral,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            item {
+                val placeholder = if (useHandle) "Tap to enter User ID" else "Tap to enter email"
+                val label = if (useHandle) "User ID" else "Email"
                 Chip(
                     modifier = Modifier.fillMaxWidth(),
                     label = {
                         Text(
-                            text = if (email.isBlank()) "Tap to enter email" else email,
-                            color = if (email.isBlank()) FocusColors.Neutral else FocusColors.Focus,
+                            text = if (identifier.isBlank()) placeholder else identifier,
+                            color = if (identifier.isBlank()) FocusColors.Neutral else FocusColors.Focus,
                             fontSize = 12.sp,
                         )
                     },
                     colors = ChipDefaults.secondaryChipColors(),
                     onClick = {
-                        val ri = RemoteInput.Builder(KEY_EMAIL).setLabel("Email").build()
+                        val ri = RemoteInput.Builder(KEY_IDENTIFIER).setLabel(label).build()
                         val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
                         RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(ri))
-                        emailLauncher.launch(intent)
+                        identifierLauncher.launch(intent)
                     },
                 )
             }
+
+            // ── Password chip ──────────────────────────────────────────────
             item {
                 Chip(
                     modifier = Modifier.fillMaxWidth(),
@@ -129,14 +138,39 @@ fun SignInScreen(
                     },
                 )
             }
+
+            // ── Sign in button ─────────────────────────────────────────────
             item {
                 Chip(
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Sign in with email") },
-                    enabled = email.isNotBlank() && password.isNotBlank(),
+                    label = { Text(if (useHandle) "Sign in with User ID" else "Sign in with email") },
+                    enabled = identifier.isNotBlank() && password.isNotBlank(),
                     colors = ChipDefaults.primaryChipColors(),
-                    onClick = { onEmailSignIn(email, password) },
+                    onClick = {
+                        if (useHandle) onHandleSignIn(identifier, password)
+                        else onEmailSignIn(identifier, password)
+                    },
                 )
+            }
+
+            // ── Google fallback ────────────────────────────────────────────
+            item {
+                Text(
+                    text = "or",
+                    fontSize = 11.sp,
+                    color = FocusColors.Neutral,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            item {
+                Button(
+                    onClick = onSignIn,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    colors = ButtonDefaults.secondaryButtonColors(),
+                ) {
+                    Text("Sign in with Google", fontSize = 11.sp)
+                }
             }
 
             if (error != null) {

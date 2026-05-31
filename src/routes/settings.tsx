@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, BellRing, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -22,6 +22,7 @@ import type { Category } from "@/lib/focuslog/types";
 import {
   loadPomodoro, savePomodoro, loadPauseAlerts, savePauseAlerts, type PomodoroConfig,
 } from "@/lib/focuslog/alerts";
+import { fetchHandle, saveHandle, isValidHandle, isHandleTaken } from "@/lib/focuslog/handle";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "FocusLog — Settings" }] }),
@@ -38,8 +39,51 @@ function SettingsScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
   const [pauseAlerts, setPauseAlerts] = useState<boolean>(() => loadPauseAlerts());
+  const [handle, setHandle] = useState<string | null>(null);
+  const [editHandle, setEditHandle] = useState(false);
+  const [handleInput, setHandleInput] = useState("");
+  const [handleError, setHandleError] = useState<string | null>(null);
+  const [handleSaving, setHandleSaving] = useState(false);
+  const handleInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => { savePomodoro(pomo); }, [pomo]);
   useEffect(() => { savePauseAlerts(pauseAlerts); }, [pauseAlerts]);
+
+  useEffect(() => {
+    if (user?.id) fetchHandle(user.id).then(setHandle);
+  }, [user?.id]);
+
+  const startEditHandle = () => {
+    setHandleInput(handle ?? "");
+    setHandleError(null);
+    setEditHandle(true);
+    setTimeout(() => handleInputRef.current?.focus(), 50);
+  };
+
+  const commitHandle = async () => {
+    if (!user) return;
+    const h = handleInput.trim().toLowerCase();
+    if (!isValidHandle(h)) {
+      setHandleError("3–10 lowercase letters and numbers only");
+      return;
+    }
+    setHandleSaving(true);
+    setHandleError(null);
+    const taken = await isHandleTaken(h, user.id);
+    if (taken) {
+      setHandleError("That User ID is already taken");
+      setHandleSaving(false);
+      return;
+    }
+    const { error } = await saveHandle(user.id, h, user.email ?? "");
+    if (error) {
+      setHandleError("Failed to save — try again");
+    } else {
+      setHandle(h);
+      setEditHandle(false);
+    }
+    setHandleSaving(false);
+  };
 
   const move = (idx: number, dir: -1 | 1) => {
     const ids = categories.map((c) => c.id);
@@ -168,8 +212,35 @@ function SettingsScreen() {
           </>
         ) : (
           <>
-            <p className="mb-3 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
-            <Button variant="outline" className="w-full justify-start" onClick={() => signOut()}>
+            <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+            {editHandle ? (
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  ref={handleInputRef}
+                  value={handleInput}
+                  onChange={(e) => setHandleInput(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                  placeholder="user id"
+                  maxLength={10}
+                  className="font-mono h-8 text-sm"
+                  onKeyDown={(e) => { if (e.key === "Enter") commitHandle(); if (e.key === "Escape") setEditHandle(false); }}
+                />
+                <button onClick={commitHandle} disabled={handleSaving} className="rounded-md p-1.5 text-focus" aria-label="Save">
+                  <Check className="h-4 w-4" />
+                </button>
+                <button onClick={() => setEditHandle(false)} className="rounded-md p-1.5 text-muted-foreground" aria-label="Cancel">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="mt-1 flex items-center gap-2">
+                <span className="font-mono text-base font-semibold">@{handle ?? "—"}</span>
+                <button onClick={startEditHandle} className="rounded-md p-1 text-muted-foreground hover:text-foreground" aria-label="Edit User ID">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+            {handleError && <p className="mt-1 text-[11px] text-destructive">{handleError}</p>}
+            <Button variant="outline" className="mt-3 w-full justify-start" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" /> Sign out
             </Button>
           </>

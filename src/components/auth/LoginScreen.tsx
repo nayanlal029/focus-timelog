@@ -7,28 +7,50 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { suggestHandle, saveHandle, emailForHandle } from "@/lib/focuslog/handle";
 
 export function LoginScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState(""); // email or handle
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const { enterGuest } = useAuth();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!identifier || !password) return;
     setBusy(true);
     try {
       if (mode === "login") {
+        // Resolve handle → email if no @ present
+        let email = identifier.trim();
+        if (!email.includes("@")) {
+          const resolved = await emailForHandle(email);
+          if (!resolved) {
+            toast.error("User ID not found. Try signing in with your email instead.");
+            return;
+          }
+          email = resolved;
+        }
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        // Signup always requires a real email
+        const email = identifier.trim();
+        if (!email.includes("@")) {
+          toast.error("Please enter your email address to create an account.");
+          return;
+        }
+        const { data, error } = await supabase.auth.signUp({
           email, password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
+        // Auto-assign a handle for new users
+        if (data.user) {
+          const handle = suggestHandle(email);
+          await saveHandle(data.user.id, handle, email);
+        }
         toast.success("Account created. You're signed in.");
       }
     } catch (err) {
@@ -50,7 +72,6 @@ export function LoginScreen() {
         toast.error(m);
         setBusy(false);
       }
-      // If redirected, browser navigates away; if tokens received, auth listener picks it up.
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Google sign-in failed");
       setBusy(false);
@@ -63,17 +84,33 @@ export function LoginScreen() {
         <div className="mb-6 text-center">
           <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">FocusLog</div>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">{mode === "login" ? "Welcome back" : "Create account"}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Your data syncs across phone, tablet, and desktop.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Your data syncs across phone, tablet, desktop, and watch.</p>
         </div>
 
         <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-card p-4">
           <div className="space-y-1">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="identifier">{mode === "login" ? "Email or User ID" : "Email"}</Label>
+            <Input
+              id="identifier"
+              type="text"
+              autoComplete="email"
+              placeholder={mode === "login" ? "e.g. nlal029 or you@email.com" : "you@email.com"}
+              required
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+            />
           </div>
           <div className="space-y-1">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              id="password"
+              type="password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}

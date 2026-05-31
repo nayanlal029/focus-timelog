@@ -10,11 +10,13 @@ import com.focuslog.wear.BuildConfig
 import com.focuslog.wear.data.SupabaseProvider
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.focuslog.wear.data.UserProfile
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserSession
+import io.github.jan.supabase.postgrest.from
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -133,6 +135,35 @@ class AuthManager(context: Context) {
      * sign-in (no way to add a Google account without a paired phone). Google remains the
      * production path on a real watch.
      */
+    /**
+     * Sign in with a short handle (e.g. "nlal029") + password.
+     * Looks up the email from public.user_profiles, then signs in with email + password.
+     */
+    suspend fun signInWithHandle(handle: String, password: String): Result<Unit> = runCatching<Unit> {
+        val profile = SupabaseProvider.client
+            .from("user_profiles")
+            .select { filter { eq("handle", handle.trim().lowercase()) } }
+            .decodeSingleOrNull<UserProfile>()
+            ?: throw IllegalArgumentException("User ID '${handle.trim()}' not found")
+        auth.signInWith(Email) {
+            this.email = profile.email
+            this.password = password
+        }
+        persistCurrent()
+    }
+
+    /**
+     * Fetch the handle for the currently signed-in user, or null if not found.
+     */
+    suspend fun fetchHandle(): String? = runCatching {
+        val uid = currentUserId() ?: return@runCatching null
+        SupabaseProvider.client
+            .from("user_profiles")
+            .select { filter { eq("user_id", uid) } }
+            .decodeSingleOrNull<UserProfile>()
+            ?.handle
+    }.getOrNull()
+
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         auth.signInWith(Email) {
             this.email = email.trim()
