@@ -41,6 +41,7 @@ fun HomeScreen(
     pomodoroWorkMin: Int,
     pomodoroBreakMin: Int,
     sleepAfterSec: Int,
+    recentCategoryIds: List<String>,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
@@ -62,6 +63,7 @@ fun HomeScreen(
                 categories = categories,
                 selected = selected,
                 active = active,
+                recentIds = recentCategoryIds,
                 onStart = onStart,
                 onSelect = onSelect,
                 onResumeRunning = onResumeRunning,
@@ -89,13 +91,19 @@ private fun PlayPage(
     categories: List<Category>,
     selected: Category?,
     active: Active?,
+    recentIds: List<String>,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
     onAddCategory: () -> Unit,
 ) {
     val sorted = categories.sortedWith(
-        compareBy({ typeRank(it.type) }, { it.order }, { it.name })
+        compareBy(
+            { val pos = recentIds.indexOf(it.id); if (pos == -1) Int.MAX_VALUE else pos },
+            { typeRank(it.type) },
+            { it.order },
+            { it.name },
+        )
     )
     val listState = rememberScalingLazyListState()
 

@@ -31,22 +31,40 @@ class SupabaseRepository(context: Context) {
         if (entities.isNotEmpty()) db.categoryDao().deleteMissing(entities.map { it.id })
     }
 
-    suspend fun addCategory(name: String, type: CategoryType, userId: String): Result<Category> =
-        runCatching {
-            val id = UUID.randomUUID().toString()
-            val maxOrder = db.categoryDao().getAll().maxOfOrNull { it.order } ?: 0
-            val insert = CategoryInsert(
-                id = id,
-                userId = userId,
-                name = name,
-                type = type.wire,
-                order = maxOrder + 1,
-            )
-            client.from("categories").insert(insert)
-            val entity = CategoryEntity(id, name, type.wire, maxOrder + 1)
-            db.categoryDao().upsertAll(listOf(entity))
-            Category(id, name, type, maxOrder + 1)
+    suspend fun addCategory(
+        name: String,
+        type: CategoryType,
+        userId: String,
+        order: Int? = null,
+    ): Result<Category> = runCatching {
+        val id = UUID.randomUUID().toString()
+        val effectiveOrder = order ?: ((db.categoryDao().getAll().maxOfOrNull { it.order } ?: 0) + 1)
+        val insert = CategoryInsert(
+            id = id,
+            userId = userId,
+            name = name,
+            type = type.wire,
+            order = effectiveOrder,
+        )
+        client.from("categories").insert(insert)
+        val entity = CategoryEntity(id, name, type.wire, effectiveOrder)
+        db.categoryDao().upsertAll(listOf(entity))
+        Category(id, name, type, effectiveOrder)
+    }
+
+    suspend fun seedDefaultCategories(userId: String) {
+        val defaults = listOf(
+            "Work"          to CategoryType.FOCUS,
+            "Study"         to CategoryType.FOCUS,
+            "Exercise"      to CategoryType.FOCUS,
+            "Personal"      to CategoryType.FOCUS,
+            "Break / Lunch" to CategoryType.NEUTRAL,
+            "Social"        to CategoryType.NEUTRAL,
+        )
+        defaults.forEachIndexed { index, (name, type) ->
+            addCategory(name, type, userId, order = index + 1)
         }
+    }
 
     // ── Time blocks ───────────────────────────────────────────────────────────
 

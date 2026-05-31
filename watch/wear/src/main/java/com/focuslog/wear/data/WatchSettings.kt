@@ -3,11 +3,13 @@ package com.focuslog.wear.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.watchDataStore: DataStore<Preferences> by preferencesDataStore(name = "watch_settings")
@@ -15,19 +17,44 @@ private val Context.watchDataStore: DataStore<Preferences> by preferencesDataSto
 class WatchSettings(private val context: Context) {
 
     companion object {
-        val POMODORO_WORK_MIN  = intPreferencesKey("pomodoro_work_min")
-        val POMODORO_BREAK_MIN = intPreferencesKey("pomodoro_break_min")
-        val SLEEP_AFTER_SEC    = intPreferencesKey("sleep_after_sec")
-        val LAST_CATEGORY_ID   = stringPreferencesKey("last_category_id")
+        val POMODORO_WORK_MIN          = intPreferencesKey("pomodoro_work_min")
+        val POMODORO_BREAK_MIN         = intPreferencesKey("pomodoro_break_min")
+        val SLEEP_AFTER_SEC            = intPreferencesKey("sleep_after_sec")
+        val LAST_CATEGORY_ID           = stringPreferencesKey("last_category_id")
+        val DEFAULT_CATEGORIES_SEEDED  = booleanPreferencesKey("default_categories_seeded")
+        val RECENT_CATEGORY_IDS        = stringPreferencesKey("recent_category_ids")
     }
 
-    val pomodoroWorkMin: Flow<Int>   = context.watchDataStore.data.map { it[POMODORO_WORK_MIN]  ?: 25 }
-    val pomodoroBreakMin: Flow<Int>  = context.watchDataStore.data.map { it[POMODORO_BREAK_MIN] ?: 5 }
-    val sleepAfterSec: Flow<Int>     = context.watchDataStore.data.map { it[SLEEP_AFTER_SEC]    ?: 8 }
+    val pomodoroWorkMin: Flow<Int>    = context.watchDataStore.data.map { it[POMODORO_WORK_MIN]  ?: 25 }
+    val pomodoroBreakMin: Flow<Int>   = context.watchDataStore.data.map { it[POMODORO_BREAK_MIN] ?: 5 }
+    val sleepAfterSec: Flow<Int>      = context.watchDataStore.data.map { it[SLEEP_AFTER_SEC]    ?: 8 }
     val lastCategoryId: Flow<String?> = context.watchDataStore.data.map { it[LAST_CATEGORY_ID] }
+
+    val defaultCategoriesSeeded: Flow<Boolean> =
+        context.watchDataStore.data.map { it[DEFAULT_CATEGORIES_SEEDED] ?: false }
+
+    val recentCategoryIds: Flow<List<String>> =
+        context.watchDataStore.data.map { prefs ->
+            prefs[RECENT_CATEGORY_IDS]
+                ?.split(",")
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+        }
 
     suspend fun setPomodoroWorkMin(v: Int)    = context.watchDataStore.edit { it[POMODORO_WORK_MIN]  = v.coerceIn(1, 120) }
     suspend fun setPomodoroBreakMin(v: Int)   = context.watchDataStore.edit { it[POMODORO_BREAK_MIN] = v.coerceIn(1, 60) }
     suspend fun setSleepAfterSec(v: Int)      = context.watchDataStore.edit { it[SLEEP_AFTER_SEC]    = v.coerceIn(3, 60) }
     suspend fun setLastCategoryId(id: String) = context.watchDataStore.edit { it[LAST_CATEGORY_ID]   = id }
+
+    suspend fun markDefaultCategoriesSeeded() =
+        context.watchDataStore.edit { it[DEFAULT_CATEGORIES_SEEDED] = true }
+
+    suspend fun pushRecentCategory(id: String) {
+        context.watchDataStore.edit { prefs ->
+            val current = prefs[RECENT_CATEGORY_IDS]
+                ?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+            val updated = (listOf(id) + current.filter { it != id }).take(10)
+            prefs[RECENT_CATEGORY_IDS] = updated.joinToString(",")
+        }
+    }
 }

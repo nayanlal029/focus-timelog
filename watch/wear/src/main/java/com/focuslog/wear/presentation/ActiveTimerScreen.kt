@@ -85,21 +85,13 @@ fun ActiveTimerScreen(
             modifier = Modifier.fillMaxSize().background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = fmtHMS(displayMs),
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = active.categoryName,
-                    color = Color.Gray,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
+            Text(
+                text = fmtHMS(displayMs),
+                color = Color.White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
         return
     }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -111,6 +112,10 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         settings.pomodoroBreakMin.map { it * 60_000L }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5 * 60_000L)
 
+    val recentCategoryIds: StateFlow<List<String>> =
+        settings.recentCategoryIds
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     // ── Alerts ────────────────────────────────────────────────────────────────
 
     private val _alert = MutableSharedFlow<WatchAlert>(extraBufferCapacity = 2)
@@ -136,7 +141,18 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        viewModelScope.launch { repo.refreshCategories() }
+        viewModelScope.launch {
+            repo.refreshCategories()
+            val alreadySeeded = settings.defaultCategoriesSeeded.first()
+            if (!alreadySeeded && db.categoryDao().getAll().isEmpty()) {
+                val userId = auth.currentUserId()
+                if (userId != null) {
+                    repo.seedDefaultCategories(userId)
+                    settings.markDefaultCategoriesSeeded()
+                    repo.refreshCategories()
+                }
+            }
+        }
 
         viewModelScope.launch {
             while (true) {
@@ -206,7 +222,10 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         persist()
         TimerForegroundService.start(getApplication())
         vibrateSingle()
-        viewModelScope.launch { settings.setLastCategoryId(category.id) }
+        viewModelScope.launch {
+            settings.setLastCategoryId(category.id)
+            settings.pushRecentCategory(category.id)
+        }
     }
 
     /** Hardware button 1 double-tap: start with selected category, or pause/resume if running. */

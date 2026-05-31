@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.wear.ambient.AmbientLifecycleObserver
@@ -23,12 +24,16 @@ import com.focuslog.wear.viewmodel.AuthViewModel
 import com.focuslog.wear.viewmodel.SummaryViewModel
 import com.focuslog.wear.viewmodel.TimerPhase
 import com.focuslog.wear.viewmodel.TimerViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private object Routes {
     const val PICKER = "picker"
     const val TIMER = "timer"
     const val STOP = "stop"
     const val SUMMARY = "summary"
+    const val DAY_SUMMARY = "day_summary"
     const val ADD_CATEGORY = "add_category"
 }
 
@@ -52,6 +57,7 @@ class MainActivity : ComponentActivity() {
 
     private var navController: NavController? = null
     private var lastStemTap = 0L
+    private var stemJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,18 +71,28 @@ class MainActivity : ComponentActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         return when (keyCode) {
-            // Crown press or side button — double-tap to start/pause
+            // Crown / side button:
+            //   single-tap → start/pause immediately (fires after 400ms debounce)
+            //   double-tap  → go home (cancels pending single-tap action)
             KeyEvent.KEYCODE_STEM_PRIMARY, KeyEvent.KEYCODE_STEM_1 -> {
                 val now = System.currentTimeMillis()
                 if (now - lastStemTap < 400L) {
-                    timerVm.toggleStartPause()
+                    stemJob?.cancel()
                     lastStemTap = 0L
+                    navController?.navigate(Routes.PICKER) {
+                        popUpTo(Routes.PICKER) { inclusive = true }
+                    }
                 } else {
                     lastStemTap = now
+                    stemJob?.cancel()
+                    stemJob = lifecycleScope.launch {
+                        delay(400)
+                        timerVm.toggleStartPause()
+                    }
                 }
                 true
             }
-            // Second button — go home
+            // Second button — go home (backup)
             KeyEvent.KEYCODE_STEM_2 -> {
                 navController?.navigate(Routes.PICKER) {
                     popUpTo(Routes.PICKER) { inclusive = true }
@@ -126,7 +142,8 @@ class MainActivity : ComponentActivity() {
         val pomodoroBreakMs by timerVm.pomodoroBreakMs.collectAsStateWithLifecycle()
         val pomodoroWorkMin by timerVm.pomodoroWorkMin.collectAsStateWithLifecycle()
         val pomodoroBreakMin by timerVm.pomodoroBreakMin.collectAsStateWithLifecycle()
-        val sleepAfterSec   by timerVm.sleepAfterSec.collectAsStateWithLifecycle()
+        val sleepAfterSec    by timerVm.sleepAfterSec.collectAsStateWithLifecycle()
+        val recentCategoryIds by timerVm.recentCategoryIds.collectAsStateWithLifecycle()
 
         SwipeDismissableNavHost(navController = nav, startDestination = Routes.PICKER) {
 
@@ -139,6 +156,7 @@ class MainActivity : ComponentActivity() {
                     pomodoroWorkMin = pomodoroWorkMin,
                     pomodoroBreakMin = pomodoroBreakMin,
                     sleepAfterSec = sleepAfterSec,
+                    recentCategoryIds = recentCategoryIds,
                     onStart = {
                         selected?.let { cat ->
                             timerVm.startActivity(cat)
@@ -191,11 +209,20 @@ class MainActivity : ComponentActivity() {
                         durationMs = a.focusElapsed(now),
                         onConfirm = {
                             timerVm.stop()
-                            nav.popBackStack(Routes.PICKER, inclusive = false)
+                            nav.navigate(Routes.DAY_SUMMARY) {
+                                popUpTo(Routes.PICKER) { inclusive = false }
+                            }
                         },
                         onCancel = { nav.popBackStack() },
                     )
                 }
+            }
+
+            composable(Routes.DAY_SUMMARY) {
+                DaySummaryScreen(
+                    vm = summaryVm,
+                    onViewFull = { nav.navigate(Routes.SUMMARY) },
+                )
             }
 
             composable(Routes.SUMMARY) {
