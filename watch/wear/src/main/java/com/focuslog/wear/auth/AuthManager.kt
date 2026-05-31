@@ -53,6 +53,12 @@ class AuthManager(context: Context) {
                     user = null,
                 )
             )
+            // Force a real refresh so a token from a different/old Supabase project (or an
+            // expired one) is rejected here rather than silently landing on the home screen
+            // with a session that can't read any data. Throws if the refresh token is invalid.
+            auth.refreshCurrentSession()
+            val valid = auth.currentSessionOrNull()?.user?.id != null
+            if (!valid) throw IllegalStateException("No valid session after refresh")
             persistCurrent()
             true
         }.getOrElse {
