@@ -43,5 +43,20 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Dev/testing path: email + password sign-in (works on the emulator, no Google needed). */
+    fun signInWithEmail(email: String, password: String) {
+        _state.value = AuthState.LOADING
+        _error.value = null
+        viewModelScope.launch {
+            val result = auth.signInWithEmail(email, password)
+            if (result.isSuccess) {
+                _state.value = AuthState.SIGNED_IN
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Sign-in failed"
+                _state.value = AuthState.SIGNED_OUT
+            }
+        }
+    }
+
     fun clearError() { _error.value = null }
 }
