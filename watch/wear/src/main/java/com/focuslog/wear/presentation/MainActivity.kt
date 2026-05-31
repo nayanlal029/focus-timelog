@@ -186,7 +186,6 @@ class MainActivity : ComponentActivity() {
                         pomodoroEnabled = pomodoroEnabled,
                         pomodoroWorkMs = pomodoroWorkMs,
                         pomodoroBreakMs = pomodoroBreakMs,
-                        sleepAfterSec = sleepAfterSec,
                         isAmbient = isAmbient,
                         alertFlow = timerVm.alert,
                         onPauseResume = {

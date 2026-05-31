@@ -1,6 +1,7 @@
 package com.focuslog.wear.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -76,6 +77,7 @@ fun HomeScreen(
                 onSelect = onSelect,
                 onResumeRunning = onResumeRunning,
                 onAddCategory = onAddCategory,
+                onSummary = onSummary,
             )
             else -> SettingsPage(
                 pomodoroEnabled = pomodoroEnabled,
@@ -105,6 +107,7 @@ private fun PlayPage(
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
     onAddCategory: () -> Unit,
+    onSummary: () -> Unit,
 ) {
     LaunchedEffect(Unit) { summaryVm.refresh() }
     val summaryState by summaryVm.state.collectAsStateWithLifecycle()
@@ -135,7 +138,10 @@ private fun PlayPage(
                 val neutMs  = s.items.filter { it.type == CategoryType.NEUTRAL }.sumOf { it.totalMs }
                 if (focusMs > 0L || redMs > 0L || neutMs > 0L) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp)
+                            .clickable { onSummary() },
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

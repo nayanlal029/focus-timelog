@@ -37,6 +37,9 @@ class SummaryViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow<SummaryUiState>(SummaryUiState.Loading)
     val state: StateFlow<SummaryUiState> = _state.asStateFlow()
 
+    private var lastRefreshAt = 0L
+    private val refreshThrottleMs = 5 * 60 * 1_000L
+
     init { load() }
 
     fun setPeriod(p: SummaryPeriod) {
@@ -45,9 +48,14 @@ class SummaryViewModel(app: Application) : AndroidViewModel(app) {
         load()
     }
 
-    fun refresh() = load()
+    fun refresh() {
+        val now = System.currentTimeMillis()
+        if (now - lastRefreshAt < refreshThrottleMs && _state.value is SummaryUiState.Ready) return
+        load()
+    }
 
     private fun load() {
+        lastRefreshAt = System.currentTimeMillis()
         _state.value = SummaryUiState.Loading
         viewModelScope.launch {
             val startMs = System.currentTimeMillis() - _period.value.ms

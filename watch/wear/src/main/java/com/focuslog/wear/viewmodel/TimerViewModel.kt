@@ -96,8 +96,9 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Settings-backed flows ─────────────────────────────────────────────────
 
-    private val _pomodoroEnabled = MutableStateFlow(false)
-    val pomodoroEnabled: StateFlow<Boolean> = _pomodoroEnabled.asStateFlow()
+    val pomodoroEnabled: StateFlow<Boolean> =
+        settings.pomodoroEnabled
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     val pomodoroWorkMin: StateFlow<Int> =
         settings.pomodoroWorkMin.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 25)
@@ -167,8 +168,12 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 val now = System.currentTimeMillis()
                 _now.value = now
                 checkAlerts(now)
-                // 15s ticks in ambient saves CPU wake cycles; 1s when screen is active
-                kotlinx.coroutines.delay(if (_isAmbient.value) 15_000L else 1_000L)
+                val delay = when {
+                    _active.value == null -> 30_000L  // idle: no timer running, slow tick
+                    _isAmbient.value      -> 15_000L  // ambient: saves CPU wake cycles
+                    else                  -> 1_000L   // active + interactive: 1 s
+                }
+                kotlinx.coroutines.delay(delay)
             }
         }
     }
@@ -184,23 +189,23 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         if (a.phase == TimerPhase.PAUSED) {
             val breakMs = a.breakElapsed(now)
             // Distraction threshold (non-Pomodoro manual pause)
-            if (!_pomodoroEnabled.value && !distractionAlerted && breakMs >= distractionThresholdMs) {
+            if (!pomodoroEnabled.value && !distractionAlerted && breakMs >= distractionThresholdMs) {
                 distractionAlerted = true
                 _alert.tryEmit(WatchAlert.DistractionThreshold)
                 vibrate()
             }
             // Pomodoro break done → vibrate 3× and start counting overflow as distraction
-            if (_pomodoroEnabled.value && !pomodoroBreakAlerted && breakMs >= pomodoroBreakMs.value) {
+            if (pomodoroEnabled.value && !pomodoroBreakAlerted && breakMs >= pomodoroBreakMs.value) {
                 pomodoroBreakAlerted = true
                 _alert.tryEmit(WatchAlert.PomodoroBreakDone)
-                vibrateTimes(3)
+                vibrateTripleGroup()
             }
         } else {
             distractionAlerted = false
             pomodoroBreakAlerted = false
         }
 
-        if (_pomodoroEnabled.value && a.phase == TimerPhase.RUNNING) {
+        if (pomodoroEnabled.value && a.phase == TimerPhase.RUNNING) {
             // Per-cycle countdown: only the focus accrued since this cycle began counts.
             val cycleFocus = a.focusElapsed(now) - a.pomodoroWorkBaseMs
             if (!pomodoroWorkAlerted && cycleFocus >= pomodoroWorkMs.value) {
@@ -219,6 +224,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startActivity(category: Category) {
         val now = System.currentTimeMillis()
+        _now.value = now   // update clock immediately so timer screen shows 0:00 instantly
         _active.value = Active(
             categoryId = category.id,
             categoryName = category.name,
@@ -269,7 +275,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         )
         // Under Pomodoro, resuming starts a fresh work cycle: rebase the countdown to "now" so the
         // next 25-min session counts from zero, and re-arm the work alert.
-        _active.value = if (_pomodoroEnabled.value) {
+        _active.value = if (pomodoroEnabled.value) {
             pomodoroWorkAlerted = false
             resumed.copy(pomodoroWorkBaseMs = resumed.focusElapsed(now))
         } else {
@@ -309,7 +315,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     fun cancel() = clearActive()
 
     fun togglePomodoro() {
-        _pomodoroEnabled.value = !_pomodoroEnabled.value
+        viewModelScope.launch { settings.setPomodoroEnabled(!pomodoroEnabled.value) }
         pomodoroWorkAlerted = false
         pomodoroBreakAlerted = false
     }
@@ -338,7 +344,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private fun queuePauseBlocks(start: Long, end: Long) {
         if (end <= start) return
         val breakWindow = pomodoroBreakMs.value
-        if (_pomodoroEnabled.value && (end - start) > breakWindow) {
+        if (pomodoroEnabled.value && (end - start) > breakWindow) {
             val breakEnd = start + breakWindow
             queueBlock(BREAK_CATEGORY_ID, BREAK_CATEGORY_NAME, CategoryType.NEUTRAL, start, breakEnd, isBreak = true)
             queueBlock(DISTRACTION_CATEGORY_ID, DISTRACTION_CATEGORY_NAME, CategoryType.DISTRACTION, breakEnd, end, isBreak = false)
@@ -412,17 +418,15 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** N spaced pulses — used to insistently nudge the user (e.g. Pomodoro break over). */
-    private fun vibrateTimes(count: Int) {
+    /** 3×3×3 vibration: three groups of three short pulses, 1 s gap between groups. */
+    private fun vibrateTripleGroup() {
         runCatching {
-            val pattern = ArrayList<Long>()
-            pattern.add(0L)
-            repeat(count) { pattern.add(400L); pattern.add(250L) }
+            val pulse   = longArrayOf(0, 150, 80, 150, 80, 150)
+            val gap     = longArrayOf(1_000)
+            val pattern = pulse + gap + pulse + gap + pulse
             val vm = getApplication<Application>()
                 .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vm.defaultVibrator.vibrate(
-                VibrationEffect.createWaveform(pattern.toLongArray(), -1)
-            )
+            vm.defaultVibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
         }
     }
 

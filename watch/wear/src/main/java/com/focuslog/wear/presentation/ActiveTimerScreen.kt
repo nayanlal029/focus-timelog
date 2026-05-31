@@ -51,7 +51,6 @@ fun ActiveTimerScreen(
     pomodoroEnabled: Boolean,
     pomodoroWorkMs: Long,
     pomodoroBreakMs: Long,
-    sleepAfterSec: Int,
     isAmbient: Boolean,
     alertFlow: SharedFlow<WatchAlert>,
     onPauseResume: () -> Unit,
@@ -68,12 +67,10 @@ fun ActiveTimerScreen(
     val breakRemaining = pomodoroBreakMs - breakMs            // negative once break is over
     val distractionOverflow = (breakMs - pomodoroBreakMs).coerceAtLeast(0)
 
-    // Keep screen on for sleepAfterSec, then allow natural sleep
+    // Keep screen on for the entire timer session; the OS handles ambient/dim naturally.
     val window = (LocalContext.current as? Activity)?.window
-    LaunchedEffect(sleepAfterSec) {
+    LaunchedEffect(Unit) {
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        kotlinx.coroutines.delay(sleepAfterSec * 1000L)
-        window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
     DisposableEffect(Unit) {
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
