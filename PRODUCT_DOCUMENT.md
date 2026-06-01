@@ -1,6 +1,6 @@
 # Focus-TimeLog — Product Document
 
-**Version:** 1.0 (Current)
+**Version:** 1.2 (Current)
 **Document Type:** Product Requirements & Feature Specification
 **Status:** Live / Production
 
@@ -36,9 +36,9 @@
 
 ## 1. Product Overview
 
-**Focus-TimeLlog** (internally "FocusLogNL") is a mobile-first, cloud-synced time-tracking application designed to help individuals understand where their time actually goes — distinguishing productive focus time from distractions and neutral activity in a continuous, timeline-based view.
+**Focus-TimeLog** (internally "FocusLogNL") is a mobile-first, cloud-synced time-tracking application designed to help individuals understand where their time actually goes — distinguishing productive focus time from distractions and neutral activity in a continuous, timeline-based view.
 
-Unlike conventional time-trackers that require rigid project/task hierarchies, Focus-TimeLlog treats time as a flowing stream: every moment belongs to a category, and switching activities is as fast as tapping a chip. The result is an honest, ground-truth record of how time is spent throughout the day.
+Unlike conventional time-trackers that require rigid project/task hierarchies, Focus-TimeLog treats time as a flowing stream: every moment belongs to a category, and switching activities is as fast as tapping a chip. The result is an honest, ground-truth record of how time is spent throughout the day.
 
 **Core loop:**
 
@@ -60,7 +60,7 @@ Unlike conventional time-trackers that require rigid project/task hierarchies, F
 
 ### Jobs to Be Done
 
-| Job | How Focus-TimeLlog Solves It |
+| Job | How Focus-TimeLog Solves It |
 |-----|------------------------------|
 | "I want to know how much I actually focused today" | Live timer with focus/distraction labeling; Dashboard totals card |
 | "I keep getting distracted and want to see the pattern" | Timeline + Gantt chart with color-coded distraction blocks |
@@ -68,18 +68,20 @@ Unlike conventional time-trackers that require rigid project/task hierarchies, F
 | "I want to review my week and plan better" | 7-day dashboard with per-day bar chart + top categories |
 | "I need the data in a spreadsheet for further analysis" | Excel export with date/time range filter |
 | "I switch between phone and laptop during the day" | Real-time Supabase sync across all devices |
+| "I want to start a timer from my wrist" | Wear OS companion app on Galaxy Watch 7 |
 
 ---
 
 ## 3. Core Value Proposition
 
-**Focus-TimeLlog turns invisible time into visible insight.**
+**Focus-TimeLog turns invisible time into visible insight.**
 
 - **Speed**: Logging an activity takes one tap — no project selection trees, no text entry required.
 - **Honesty**: The Focus / Distraction / Neutral classification makes the data emotionally legible. You can see at a glance if today was a "focus day" or a "distraction day."
 - **Continuity**: The timeline model means every minute is accounted for, not just the good ones.
 - **Flexibility**: Works as a real-time timer, a retrospective logger, or a Chrome-history reconstructor.
 - **Ownership**: Full data export to Excel; delete-all option; no vendor lock-in.
+- **Wrist access**: Wear OS companion app lets you start/stop timers from the Galaxy Watch 7 without touching your phone.
 
 ---
 
@@ -101,6 +103,7 @@ Unlike conventional time-trackers that require rigid project/task hierarchies, F
 | Export | ExcelJS |
 | Forms | react-hook-form + Zod |
 | Notifications | Sonner (toast system) |
+| Watch app | Kotlin + Jetpack Compose for Wear OS; Supabase Kotlin client |
 
 ---
 
@@ -157,7 +160,31 @@ Each row is a logged activity segment.
 
 **Index:** `(user_id, start_ms DESC)` — supports fast range queries for dashboard and history views.
 
-### 5.3 Local State (Ephemeral)
+### 5.3 `user_profiles` Table
+
+Stores the user's short handle, enabling cross-device login without typing a full email.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | UUID (PK) | FK → `auth.users(id)` ON DELETE CASCADE |
+| `handle` | text UNIQUE | 3–20 lowercase alphanumeric + underscore (`[a-z0-9_]`), e.g. `nlal029` |
+| `email` | text | Denormalized copy of the user's email — enables unauthenticated handle→email lookup |
+| `created_at` | timestamp | Auto-set on insert |
+| `updated_at` | timestamp | Auto-updated via trigger |
+
+**RLS policies:**
+
+| Policy | Rule |
+|--------|------|
+| Public SELECT | `USING (true)` — handle→email lookup works without an active session |
+| INSERT | `WITH CHECK (auth.uid() = user_id)` |
+| UPDATE | `USING (auth.uid() = user_id)` |
+
+**Index:** `user_profiles_handle_idx ON (handle)` — O(1) handle lookup.
+
+Handles are auto-generated on signup (prefix of email username + 3-digit random suffix) and are editable by the user from Settings. The watch uses `user_profiles` to resolve a typed handle to an email for password login — no email needs to be typed on the small watch keyboard.
+
+### 5.4 Local State (Ephemeral)
 
 Maintained in React context; not persisted to DB except where noted.
 
@@ -179,8 +206,15 @@ Maintained in React context; not persisted to DB except where noted.
 
 | Method | Flow |
 |--------|------|
-| Email + Password | Standard Supabase Auth email/password |
-| Google OAuth | Delegated through Lovable broker; redirects back to app |
+| **Email + Password** | Standard Supabase Auth email/password |
+| **User ID (handle) + Password** | Type your short handle (e.g. `nlal029`) instead of email; the app resolves it to an email via `user_profiles` and calls `signInWithPassword`. This is the **primary cross-device method** — especially useful on the watch where typing an email is painful. |
+| **Google OAuth** | Delegated through Lovable broker; redirects back to app |
+
+The login identifier field accepts either `@`-containing strings (treated as email) or handles (treated as User ID). No separate toggle needed.
+
+#### Forgot Password
+
+Available on the LoginScreen — sends a Supabase magic-link / reset email. Implemented and active.
 
 #### Session Handling
 
@@ -388,6 +422,7 @@ Central control panel for personalizing the app and managing data.
 #### Account Section
 
 - Displays signed-in email address.
+- Displays **User ID (handle)** in monospace — e.g. `@nlal029`. Tapping "Edit User ID" opens an inline edit field with format validation (`[a-z0-9_]`, 3–20 chars) and uniqueness check.
 - **Sign Out** button.
 
 #### Theme Toggle
@@ -409,7 +444,7 @@ Central control panel for personalizing the app and managing data.
 
 **Location:** Settings → Categories section
 
-Categories are the primary taxonomy of Focus-TimeLlog. Users maintain a personal library of named activities, each typed as Focus, Distraction, or Neutral.
+Categories are the primary taxonomy of Focus-TimeLog. Users maintain a personal library of named activities, each typed as Focus, Distraction, or Neutral.
 
 #### Create Category
 
@@ -538,17 +573,17 @@ This is primarily used for cleaning up erroneously logged blocks or removing imp
 
 ### 6.11 Cross-Device Real-Time Sync
 
-Focus-TimeLlog is designed to be used across **phone, tablet, and desktop** simultaneously.
+Focus-TimeLog is designed to be used across **phone, tablet, desktop, and Galaxy Watch** simultaneously.
 
 #### Architecture
 
 ```
-User Action (any device)
+User Action (any device — web or watch)
     │
     ▼
-FocusLogContext (optimistic local update)
+Local state update (React context / Room DB)
     │
-    ▼ (async, fire-and-forget)
+    ▼ (async)
 Supabase DB mutation (INSERT/UPDATE/DELETE)
     │
     ▼ (broadcasted via Postgres WAL)
@@ -566,6 +601,7 @@ Supabase Realtime channel
 | **Realtime channel** | Subscribes to `postgres_changes` on `time_blocks` and `categories` |
 | **First-login migration** | On first DB session, localStorage blocks are migrated to the user's Supabase account, preserving history from before sign-up |
 | **Active timer persistence** | Active session state is stored in localStorage so a running timer survives a browser tab refresh; it is committed to DB on Stop |
+| **Watch offline queue** | Watch blocks are queued in Room and flushed by WorkManager on reconnect — no silent data loss |
 
 ---
 
@@ -673,11 +709,13 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | Concern | Implementation |
 |---------|---------------|
 | **Row-Level Security** | All Supabase tables enforce `auth.uid() = user_id` on SELECT, INSERT, UPDATE, DELETE |
+| **user_profiles public SELECT** | Handle→email lookup uses a public SELECT policy; no PII beyond email is exposed, and email is only returned for a matching handle |
 | **Auth tokens** | Managed by Supabase Auth; refresh tokens stored in browser storage |
-| **Google OAuth** | Delegated through Lovable broker; app never sees Google credentials |
+| **Watch token storage** | EncryptedSharedPreferences on the watch; validated via `refreshCurrentSession()` on every app restore |
+| **Google OAuth** | Delegated through Lovable broker; app never sees Google credentials directly |
 | **No server-side processing** | App is a static SPA; no custom backend; no server-side logging of user data |
-| **Data deletion** | "Delete All Data" performs a hard delete on all user rows in both tables |
-| **Local data** | localStorage used only for ephemeral state (active timer, theme, filters); no PII stored locally |
+| **Data deletion** | "Delete All Data" performs a hard delete on all user rows in `time_blocks`, `categories`, and `user_profiles` |
+| **Local data** | localStorage used only for ephemeral state (active timer, theme, filters); no full PII stored locally |
 
 ---
 
@@ -693,6 +731,7 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | **Focus % trend** | Average focus percentage per user over rolling 30 days (are users improving?) |
 | **Import usage** | % of users who have performed at least one Chrome import |
 | **Export usage** | % of users who have exported data |
+| **Watch usage** | % of active users who have logged at least one block from the watch |
 
 ### Retention Metrics
 
@@ -710,6 +749,7 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | Dashboard load time | < 1s for 30-day range |
 | Chrome import (1000 entries) | < 3s end-to-end |
 | Real-time sync propagation | < 2s between devices |
+| Watch timer start latency | < 200ms (optimistic local state) |
 
 ---
 
@@ -720,12 +760,13 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | Limitation | Impact |
 |-----------|--------|
 | No overlap detection | Two blocks can be logged for the same time range (data integrity risk during Chrome import) |
-| No offline queue | DB writes fire-and-forget; a write that fails during offline is silently lost |
 | Category renames don't backfill | Historical blocks retain the old `category_name` snapshot |
 | No notifications / reminders | App cannot prompt users to start logging; relies on self-discipline |
 | Single user per account | No team/shared view |
 | Chrome import mapping is hardcoded | New domains require a code change to classify correctly; no user-configurable rules |
 | No merge functionality | UI scaffolding exists; merge operation is not yet implemented |
+| Google OAuth on watch | `NoCredentialException` — requires Android OAuth client registration + SHA-1 fingerprint propagation; User ID + password login is the workaround |
+| Lovable broker dependency | Google OAuth on web routes through Lovable's managed OAuth client; migrating to a custom GCP client removes the dependency but requires reconfiguring the redirect URI |
 
 ### Future Opportunities
 
@@ -738,61 +779,96 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | **Browser extension** | Log directly from Chrome without switching to the app |
 | **User-configurable import rules** | Let users map custom domains to their own categories |
 | **Block merging** | Merge consecutive same-category blocks into one |
-| **Pomodoro mode** | Built-in 25/5 timer with automatic break scheduling |
 | **Team / manager view** | Aggregated reports for remote teams (opt-in, privacy-preserving) |
-| **Offline-first with sync queue** | Queue failed DB writes and replay on reconnect |
+| **iOS app (Capacitor)** | Wrap the web app for App Store distribution; ~1–2 weeks of work |
+| **Android phone app (TWA)** | Trusted Web Activity wrapper for Google Play; ~1–2 days of work |
 | **API / Webhooks** | Let power users push data to Notion, Obsidian, or custom dashboards |
+| **Wear Tile** | One-tap "Start last category / Stop" surface from the watch face — already noted in the watch app roadmap |
+| **Watch Google sign-in** | Register Android OAuth client + propagate SHA-1; re-enable the commented-out Google sign-in button |
 
 ---
 
 ## 12. Companion Apps — Galaxy Watch 7
 
-To remove the friction of pulling out a phone to start or stop a timer mid-work, a **Wear OS
-companion app** for the Samsung Galaxy Watch 7 lives in the `watch/` directory of this repository.
+To remove the friction of pulling out a phone to start or stop a timer mid-work, a **standalone Wear OS app** for the Samsung Galaxy Watch 7 lives in the `watch/` directory of this repository.
 
 ### Role: logging only
 
-The watch is a **companion**, not a replacement. It handles the high-frequency, low-friction
-actions — **Start / Pause / Resume / Stop** — while the web app retains everything else
-(dashboard, history, Chrome import, Excel export, category management). This keeps the watch UI
-glanceable and the codebases focused.
+The watch is a **companion**, not a replacement. It handles the high-frequency, low-friction actions — **Start / Pause / Resume / Stop** — while the web app retains everything else (dashboard, history, Chrome import, Excel export, category management). This keeps the watch UI glanceable and the codebases focused.
 
 ### How it connects
 
 | Aspect | Approach |
 |--------|----------|
-| Platform | Wear OS 5 (Galaxy Watch 7); Kotlin + Jetpack Compose for Wear OS |
-| Connectivity | **Standalone** — the watch talks to Supabase directly over its own WiFi/LTE; no phone app required |
-| Auth | **One-time Google sign-in** on the watch via Credential Manager → `signInWith(IDToken)`; session stored encrypted and auto-refreshed |
-| Backend | The **same** Supabase project — no schema changes. The watch is just another REST client subject to the same RLS (`auth.uid() = user_id`) |
-| Categories | Read from Supabase and cached locally (Room) so the picker works offline |
-| Time blocks | Inserted to Supabase using the exact `time_blocks` columns; appear in the web app instantly via the existing Realtime subscription |
-| Offline | Blocks are queued locally first and flushed by a WorkManager retry job when connectivity returns — closing the web app's "no offline queue" gap on the watch side |
+| Platform | Wear OS 5 (Galaxy Watch 7, API 35); Kotlin + Jetpack Compose for Wear OS |
+| Connectivity | **Standalone** — the watch talks to Supabase directly over its own Wi-Fi/LTE; no phone app required |
+| **Primary auth** | **User ID (handle) + password** — type your short handle (e.g. `nlal029`) on the watch, enter your password; the app resolves the handle to an email via `user_profiles` and signs in with Supabase Auth |
+| **Alternative auth** | Email + password (toggle on the sign-in screen); Google sign-in (commented out — see Known Limitations) |
+| Backend | The **same** Supabase project as the web app — no schema changes. The watch is just another REST client subject to the same RLS (`auth.uid() = user_id`) |
+| Categories | Read from Supabase and cached locally (Room); offline-first. Most-recently-used categories surface first (DataStore MRU list). Default categories (Work, Study, Exercise, Personal, Break/Lunch, Social) are seeded on first sign-in. |
+| Time blocks | Inserted to the same `time_blocks` table; appear in the web app instantly via the existing Realtime subscription |
+| Offline queue | Blocks are queued in Room first and flushed by a WorkManager retry job when connectivity returns |
+| Session restore | `AuthManager.restore()` validates the stored token via `refreshCurrentSession()` — a stale token cannot bypass the sign-in screen |
 
 ### Watch screens
 
-1. **Category Picker** — focus-first list of the user's categories; tap to start. A running timer
-   is surfaced at the top.
-2. **Active Timer** — large `HH:MM:SS` display with Pause/Resume and Stop. Pausing starts the
-   **break / distraction timer** immediately, shown alongside.
-3. **Stop Confirmation** — confirms duration before logging (no note field; no keyboard on watch).
+1. **Home (Category Picker)** — `HorizontalPager` with two pages:
+   - **Play page:** MRU-sorted category list; today's focus / distraction / neutral totals at the top (tappable → Day Summary). Tap a category to start the timer. Running timer surfaced at the top.
+   - **Settings page:** signed-in email + User ID handle, Pomodoro toggle + duration pickers, screen keep-on toggle.
 
-Plus a **Tile** for one-tap access from the watch face, and a foreground service so the timer
-survives the wrist-down / app-backgrounded state.
+2. **Active Timer** — large `HH:MM:SS` + current wall clock `HH:mm`. Pause / Resume / Stop on-screen. In ambient mode: strips to timer + dim clock only (15 s tick rate to save battery). Screen stays on for the full session (`FLAG_KEEP_SCREEN_ON`); ambient mode handles power saving at the platform level.
 
-### Break handling
+3. **Stop Confirmation** — shows elapsed time; confirm or cancel (no keyboard, no note field).
 
-Pausing records a break window; on resume (or stop), a separate `is_break = true` block is logged
-for that window — mirroring the web app's break-block behavior so the timeline stays gap-free
-across devices.
+4. **Day Summary** — shown automatically after Stop: large green focus total for the past 24 h; smaller red/amber distraction/neutral totals. Tap "Full Summary" to see the detailed breakdown. Swipe back returns home.
 
-### Status
+5. **Add Category** — text input (RemoteInput / keyboard) + type selector; syncs to Supabase and refreshes the picker.
 
-Scaffolded with full structure and core logic in `watch/`; intended to be opened, configured
-(`secrets.properties`), and built in Android Studio. See `watch/IMPLEMENTATION_NOTES.md` for the
-done/remaining breakdown and `watch/README.md` for setup.
+6. **Sign-In** — identifier field (User ID or email toggle) + password field; signs in and proceeds to Home.
+
+Plus a **Tile** (`FocusTileService`) for one-tap access from the watch face.
+
+### Pomodoro mode (watch)
+
+| Setting | Default | Range |
+|---------|---------|-------|
+| Enabled | **ON** | Toggle |
+| Work duration | 25 min | 5–60 min |
+| Break duration | 5 min | 1–30 min |
+
+When the work period ends, a **3 × 3 vibration** fires (3 groups of 3 short pulses, 1 s gap between groups) and the timer automatically pauses → starts a break block. When the break ends, another 3 × 3 vibration fires. All settings are persisted via DataStore.
+
+### Battery optimizations
+
+| State | Tick rate |
+|-------|-----------|
+| Active + interactive | 1 s |
+| Ambient | 15 s |
+| Idle (no active timer) | 30 s |
+
+This avoids unnecessary recomposition when the app is on the home screen but no timer is running.
+
+### Break handling (mirroring web app)
+
+Pausing records a break window; on resume (or stop), a separate `is_break = true` block is logged for that window — mirroring the web app's break-block behavior so the timeline stays gap-free across devices.
+
+### Status and commit history
+
+Fully functional on the Wear OS emulator; physical Galaxy Watch 7 deployment in progress (requires wireless ADB + on-charger for stable Wi-Fi).
+
+| Commit | Description |
+|--------|-------------|
+| `eee0d24` | Button responsiveness; home stat bar (SummaryViewModel wired); wall-clock HH:mm; 15 s ambient tick |
+| `0b03fa0` | Comment out hardware-button handling (KEYCODE_STEM_PRIMARY reserved by Wear OS); on-screen controls only |
+| `20ae80b` | Google auth hardening; Pomodoro auto-break; OngoingActivity; icon alert buttons |
+| `dbba1de` | Screen keep-on (full session); Pomodoro default ON + persisted; 3×3×3 vibration; tappable aggregates; 30 s idle tick |
+| `ad4cfa4` | Auth hardening: nonce, loud error surfacing, lastKnownUserId; Settings sync diagnostics (pending count, retry chip) |
+| `6a37441` | Fix missing Kotlin imports (Log, MessageDigest, UUID) + explicit `runCatching<Unit>` type arg |
+| `c48630d` | User ID handle: `UserProfile` model, `signInWithHandle`, `fetchHandle`, handle StateFlow, SignInScreen toggle, Settings handle display |
+
+See `watch/IMPLEMENTATION_NOTES.md` for the complete done/remaining breakdown and `watch/SESSION_REFERENCE.md` for the full build log.
 
 ---
 
-*Document prepared based on codebase analysis of Focus-TimeLlog v1.0 (current production state).*
-*Last updated: May 2026*
+*Document prepared based on codebase analysis of Focus-TimeLog v1.2 (current production state).*
+*Last updated: June 2026*
