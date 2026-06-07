@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   activeMs: number;
+  breakMs?: number;
   categoryName: string;
   isPaused: boolean;
   note: string;
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export function FocusMode({
-  activeMs, categoryName, isPaused, note, onNoteChange,
+  activeMs, breakMs = 0, categoryName, isPaused, note, onNoteChange,
   onPause, onResume, onStop,
 }: Props) {
   const [revealed, setRevealed] = useState(true);
@@ -103,17 +104,22 @@ export function FocusMode({
         {categoryName}{isPaused ? " · paused" : ""}
       </div>
 
-      {/* Big timer — always visible */}
+      {/* Big timer — always visible. When paused, show red break/distraction timer. */}
       <div className="flex flex-col items-center">
         <div
           className={cn(
             "font-bold tabular-nums tracking-tight leading-none",
             "text-[clamp(72px,22vw,180px)]",
-            isPaused ? "text-muted-foreground" : "text-foreground",
+            isPaused ? "text-distraction" : "text-foreground",
           )}
         >
-          {fmtHMS(activeMs)}
+          {fmtHMS(isPaused ? breakMs : activeMs)}
         </div>
+        {isPaused && (
+          <div className="mt-3 text-xs uppercase tracking-[0.3em] text-distraction/80">
+            Distracted · focus {fmtHMS(activeMs)}
+          </div>
+        )}
         {note && (
           <div
             className={cn(
