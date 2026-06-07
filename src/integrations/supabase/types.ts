@@ -124,7 +124,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_email_for_handle: { Args: { _handle: string }; Returns: string }
+      is_handle_available: {
+        Args: { _exclude_user?: string; _handle: string }
+        Returns: boolean
+      }
     }
     Enums: {
       category_type: "focus" | "distraction" | "neutral"

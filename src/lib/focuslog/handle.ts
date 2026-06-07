@@ -18,28 +18,25 @@ export function suggestHandleFromEmail(email: string): string {
   return base;
 }
 
-/** Look up the email for a given handle. Returns null if not found. */
+/** Look up the email for a given handle via SECURITY DEFINER RPC. */
 export async function emailForHandle(handle: string): Promise<string | null> {
   const h = handle.trim().toLowerCase();
   if (!isValidHandle(h)) return null;
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("email")
-    .eq("handle", h)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_email_for_handle", { _handle: h });
   if (error || !data) return null;
-  return data.email;
+  return data as string;
 }
 
 /** Returns true if the handle is available (not taken by another user). */
 export async function isHandleAvailable(handle: string, excludeUserId?: string): Promise<boolean> {
   const h = handle.trim().toLowerCase();
   if (!isValidHandle(h)) return false;
-  let q = supabase.from("user_profiles").select("user_id").eq("handle", h).limit(1);
-  if (excludeUserId) q = q.neq("user_id", excludeUserId);
-  const { data, error } = await q;
+  const { data, error } = await supabase.rpc("is_handle_available", {
+    _handle: h,
+    _exclude_user: excludeUserId ?? undefined,
+  });
   if (error) return false;
-  return !data || data.length === 0;
+  return !!data;
 }
 
 /** Get the current user's profile row (handle + email). */
