@@ -9,13 +9,14 @@ import { Timeline } from "@/components/focuslog/Timeline";
 import { FocusMode } from "@/components/focuslog/FocusMode";
 import { Switch } from "@/components/ui/switch";
 import {
-  loadPomodoro, savePomodoro, useTimerAlerts, type PomodoroConfig,
+  loadPomodoro, savePomodoro, loadReminder, saveReminder, useTimerAlerts,
+  type PomodoroConfig, type ReminderConfig,
 } from "@/lib/focuslog/alerts";
 import { cn } from "@/lib/utils";
 
 export function TodayScreen() {
   const {
-    categories, active, blocks, computeActiveMs, getCategory,
+    categories, active, blocks, computeActiveMs, computeBreakMs, getCategory,
     startActivity, pauseActivity, resumeActivity, stopActivity, cancelActivity,
   } = useFocusLog();
 
