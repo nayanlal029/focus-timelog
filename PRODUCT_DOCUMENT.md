@@ -94,7 +94,7 @@ Unlike conventional time-trackers that require rigid project/task hierarchies, F
 | UI primitives | 40+ Radix UI accessible components |
 | Icons | Lucide React |
 | Backend / DB | Supabase (PostgreSQL) |
-| Auth | Supabase Auth (email/password + Google OAuth via Lovable broker) |
+| Auth | Supabase Auth (email/password + native Supabase Google OAuth) |
 | Real-time | Supabase Realtime (postgres_changes) |
 | Build tool | Vite 7.3 + Cloudflare Pages plugin |
 | Hosting | Cloudflare Pages (via wrangler.jsonc) |
@@ -180,7 +180,7 @@ Maintained in React context; not persisted to DB except where noted.
 | Method | Flow |
 |--------|------|
 | Email + Password | Standard Supabase Auth email/password |
-| Google OAuth | Delegated through Lovable broker; redirects back to app |
+| Google OAuth | Native Supabase OAuth (`supabase.auth.signInWithOAuth`); redirects back to app |
 
 #### Session Handling
 
@@ -674,7 +674,7 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 |---------|---------------|
 | **Row-Level Security** | All Supabase tables enforce `auth.uid() = user_id` on SELECT, INSERT, UPDATE, DELETE |
 | **Auth tokens** | Managed by Supabase Auth; refresh tokens stored in browser storage |
-| **Google OAuth** | Delegated through Lovable broker; app never sees Google credentials |
+| **Google OAuth** | Native Supabase OAuth; Google provider configured in the Supabase dashboard; app never sees Google credentials |
 | **No server-side processing** | App is a static SPA; no custom backend; no server-side logging of user data |
 | **Data deletion** | "Delete All Data" performs a hard delete on all user rows in both tables |
 | **Local data** | localStorage used only for ephemeral state (active timer, theme, filters); no PII stored locally |

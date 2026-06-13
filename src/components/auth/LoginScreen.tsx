@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,15 +74,16 @@ export function LoginScreen() {
   const google = async () => {
     setBusy(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
       });
-      if (result.error) {
-        const m = result.error instanceof Error ? result.error.message : String(result.error);
-        toast.error(m);
+      if (error) {
+        toast.error(error.message);
         setBusy(false);
       }
-      // If redirected, browser navigates away; if tokens received, auth listener picks it up.
+      // On success the browser is redirected to Google; on return the auth
+      // listener in AuthProvider picks up the session.
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Google sign-in failed");
       setBusy(false);
