@@ -7,7 +7,8 @@ export function isValidHandle(h: string): boolean {
 }
 
 export function looksLikeEmail(input: string): boolean {
-  return input.includes("@");
+  const value = input.trim();
+  return !value.startsWith("@") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 /** Suggest a handle from an email local-part, sanitized to the allowed charset. */
