@@ -26,7 +26,7 @@ import androidx.wear.compose.material.ListHeader
 import androidx.wear.compose.material.Text
 import androidx.wear.input.RemoteInputIntentHelper
 
-private const val KEY_EMAIL = "email"
+private const val KEY_IDENTIFIER = "identifier"
 private const val KEY_PASSWORD = "password"
 
 @Composable
@@ -37,14 +37,14 @@ fun SignInScreen(
     error: String? = null,
 ) {
     val listState = rememberScalingLazyListState()
-    var email by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    val emailLauncher = rememberLauncherForActivityResult(
+    val identifierLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val bundle = RemoteInput.getResultsFromIntent(result.data ?: return@rememberLauncherForActivityResult)
-        email = bundle?.getCharSequence(KEY_EMAIL)?.toString() ?: email
+        identifier = bundle?.getCharSequence(KEY_IDENTIFIER)?.toString() ?: identifier
     }
     val passwordLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -81,10 +81,9 @@ fun SignInScreen(
                 }
             }
 
-            // --- Email/password fallback (works on the emulator, no Google account needed) ---
             item {
                 Text(
-                    text = "or use email",
+                    text = "or use User ID / email",
                     fontSize = 11.sp,
                     color = FocusColors.Neutral,
                     textAlign = TextAlign.Center,
@@ -96,17 +95,17 @@ fun SignInScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = {
                         Text(
-                            text = if (email.isBlank()) "Tap to enter email" else email,
-                            color = if (email.isBlank()) FocusColors.Neutral else FocusColors.Focus,
+                            text = if (identifier.isBlank()) "Enter User ID or email" else identifier,
+                            color = if (identifier.isBlank()) FocusColors.Neutral else FocusColors.Focus,
                             fontSize = 12.sp,
                         )
                     },
                     colors = ChipDefaults.secondaryChipColors(),
                     onClick = {
-                        val ri = RemoteInput.Builder(KEY_EMAIL).setLabel("Email").build()
+                        val ri = RemoteInput.Builder(KEY_IDENTIFIER).setLabel("User ID or email").build()
                         val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
                         RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(ri))
-                        emailLauncher.launch(intent)
+                        identifierLauncher.launch(intent)
                     },
                 )
             }
@@ -132,10 +131,10 @@ fun SignInScreen(
             item {
                 Chip(
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Sign in with email") },
-                    enabled = email.isNotBlank() && password.isNotBlank(),
+                    label = { Text("Sign in") },
+                    enabled = identifier.isNotBlank() && password.isNotBlank(),
                     colors = ChipDefaults.primaryChipColors(),
-                    onClick = { onEmailSignIn(email, password) },
+                    onClick = { onEmailSignIn(identifier, password) },
                 )
             }
 
