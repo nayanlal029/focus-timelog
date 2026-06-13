@@ -14,6 +14,7 @@ import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserSession
+import io.github.jan.supabase.postgrest.postgrest
 
 /**
  * Handles one-time Google sign-in and session restoration.
@@ -91,9 +92,17 @@ class AuthManager(context: Context) {
      * sign-in (no way to add a Google account without a paired phone). Google remains the
      * production path on a real watch.
      */
-    suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
+    suspend fun signInWithEmail(identifier: String, password: String): Result<Unit> = runCatching {
+        val normalized = identifier.trim().removePrefix("@").lowercase()
+        val email = if (normalized.contains("@")) {
+            normalized
+        } else {
+            SupabaseProvider.client.postgrest
+                .rpc("get_email_for_handle", mapOf("_handle" to normalized))
+                .decodeAs<String>()
+        }
         auth.signInWith(Email) {
-            this.email = email.trim()
+            this.email = email
             this.password = password
         }
         persistCurrent()
