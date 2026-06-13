@@ -1,10 +1,14 @@
 package com.focuslog.wear.presentation
 
+import android.Manifest
 import android.app.Activity
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 // import android.view.KeyEvent  // TODO: re-enable when Wear OS allows apps to intercept KEYCODE_STEM_PRIMARY
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,11 +23,13 @@ import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.compose.runtime.LaunchedEffect
+import com.focuslog.wear.service.AppForeground
 import com.focuslog.wear.viewmodel.AuthState
 import com.focuslog.wear.viewmodel.AuthViewModel
 import com.focuslog.wear.viewmodel.SummaryViewModel
 import com.focuslog.wear.viewmodel.TimerPhase
 import com.focuslog.wear.viewmodel.TimerViewModel
+import com.focuslog.wear.viewmodel.WatchAlert
 
 private object Routes {
     const val PICKER = "picker"
@@ -55,14 +61,51 @@ class MainActivity : ComponentActivity() {
     private var navController: NavController? = null
     // private var lastStemTap = 0L  // TODO: re-enable with onKeyDown below
 
+    // Set when the activity is launched/resumed from a reminder notification, so the Timer
+    // screen can show the matching "Back to work?" / "Still focusing?" dialog immediately.
+    private val pendingReminderState = mutableStateOf<String?>(null)
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op either way */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lifecycle.addObserver(ambientObserver)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        pendingReminderState.value = intent?.getStringExtra(EXTRA_SHOW_REMINDER)
         setContent {
             MaterialTheme {
-                FocusApp(isAmbient = isAmbientState.value)
+                FocusApp(
+                    isAmbient = isAmbientState.value,
+                    pendingReminder = pendingReminderState.value,
+                    onPendingReminderConsumed = { pendingReminderState.value = null },
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingReminderState.value = intent.getStringExtra(EXTRA_SHOW_REMINDER)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppForeground.value = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppForeground.value = false
+    }
+
+    companion object {
+        const val EXTRA_SHOW_REMINDER = "com.focuslog.wear.EXTRA_SHOW_REMINDER"
+        const val REMINDER_FOCUS = "focus"
+        const val REMINDER_BREAK = "break"
     }
 
     // TODO: Hardware button handling disabled — Wear OS reserves KEYCODE_STEM_PRIMARY at the
@@ -101,6 +144,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun FocusApp(
         isAmbient: Boolean,
+        pendingReminder: String? = null,
+        onPendingReminderConsumed: () -> Unit = {},
         authVm: AuthViewModel = viewModel(),
     ) {
         val authState by authVm.state.collectAsStateWithLifecycle()
@@ -116,7 +161,7 @@ class MainActivity : ComponentActivity() {
                 onHandleSignIn = { handle, password -> authVm.signInWithHandle(handle, password) },
                 error = authError,
             )
-            AuthState.SIGNED_IN -> SignedInApp(timerVm, isAmbient)
+            AuthState.SIGNED_IN -> SignedInApp(timerVm, isAmbient, pendingReminder, onPendingReminderConsumed)
         }
     }
 
@@ -124,6 +169,8 @@ class MainActivity : ComponentActivity() {
     private fun SignedInApp(
         timerVm: TimerViewModel,
         isAmbient: Boolean,
+        pendingReminder: String? = null,
+        onPendingReminderConsumed: () -> Unit = {},
         summaryVm: SummaryViewModel = viewModel(),
     ) {
         val nav = rememberSwipeDismissableNavController()
@@ -144,10 +191,20 @@ class MainActivity : ComponentActivity() {
         val checkInEnabled   by timerVm.checkInEnabled.collectAsStateWithLifecycle()
         val checkInFocusMin  by timerVm.checkInFocusMin.collectAsStateWithLifecycle()
         val checkInBreakMin  by timerVm.checkInBreakMin.collectAsStateWithLifecycle()
+        val checkInBuzzCount by timerVm.checkInBuzzCount.collectAsStateWithLifecycle()
+        val checkInBuzzIntensity by timerVm.checkInBuzzIntensity.collectAsStateWithLifecycle()
         val recentCategoryIds by timerVm.recentCategoryIds.collectAsStateWithLifecycle()
         val pendingCount by timerVm.pendingCount.collectAsStateWithLifecycle()
         val handle by timerVm.handle.collectAsStateWithLifecycle()
         val signedInEmail = timerVm.signedInEmail()
+
+        // Reminder notification tapped while the app was closed/backgrounded: jump straight to
+        // the Timer screen so the matching "Back to work?" / "Still focusing?" dialog can show.
+        LaunchedEffect(pendingReminder, active) {
+            if (pendingReminder != null && active != null) {
+                nav.navigate(Routes.TIMER) { popUpTo(Routes.PICKER) { inclusive = false } }
+            }
+        }
 
         SwipeDismissableNavHost(navController = nav, startDestination = Routes.PICKER) {
 
@@ -163,6 +220,8 @@ class MainActivity : ComponentActivity() {
                     checkInEnabled = checkInEnabled,
                     checkInFocusMin = checkInFocusMin,
                     checkInBreakMin = checkInBreakMin,
+                    checkInBuzzCount = checkInBuzzCount,
+                    checkInBuzzIntensity = checkInBuzzIntensity,
                     recentCategoryIds = recentCategoryIds,
                     summaryVm = summaryVm,
                     signedInEmail = signedInEmail,
@@ -189,6 +248,8 @@ class MainActivity : ComponentActivity() {
                     onToggleCheckIn = timerVm::toggleCheckIn,
                     onCheckInFocusChange = timerVm::updateCheckInFocusMin,
                     onCheckInBreakChange = timerVm::updateCheckInBreakMin,
+                    onCheckInBuzzCountChange = timerVm::updateCheckInBuzzCount,
+                    onCheckInBuzzIntensityCycle = timerVm::cycleCheckInBuzzIntensity,
                 )
             }
 
@@ -210,6 +271,12 @@ class MainActivity : ComponentActivity() {
                         },
                         onStop = { nav.navigate(Routes.STOP) },
                         onSnoozeCheckIn = timerVm::snoozeCheckIn,
+                        initialAlert = when (pendingReminder) {
+                            REMINDER_FOCUS -> WatchAlert.FocusCheckIn
+                            REMINDER_BREAK -> WatchAlert.BreakCheckIn
+                            else -> null
+                        },
+                        onInitialAlertShown = onPendingReminderConsumed,
                     )
                 }
             }

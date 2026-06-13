@@ -18,6 +18,7 @@ import com.focuslog.wear.data.TimeBlockInsert
 import com.focuslog.wear.data.WatchSettings
 import com.focuslog.wear.data.local.ActiveStateEntity
 import com.focuslog.wear.data.local.WatchDatabase
+import com.focuslog.wear.service.ReminderBus
 import com.focuslog.wear.service.TimerForegroundService
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +59,6 @@ data class Active(
 }
 
 sealed interface WatchAlert {
-    object DistractionThreshold : WatchAlert
     object PomodoroWorkDone : WatchAlert
     object PomodoroBreakDone : WatchAlert
     object FocusCheckIn : WatchAlert
@@ -134,13 +134,11 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     val checkInBreakMin: StateFlow<Int> =
         settings.checkInBreakMin.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 2)
 
-    val checkInFocusMs: StateFlow<Long> =
-        settings.checkInFocusMin.map { it * 60_000L }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5 * 60_000L)
+    val checkInBuzzCount: StateFlow<Int> =
+        settings.checkInBuzzCount.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
 
-    val checkInBreakMs: StateFlow<Long> =
-        settings.checkInBreakMin.map { it * 60_000L }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 2 * 60_000L)
+    val checkInBuzzIntensity: StateFlow<Int> =
+        settings.checkInBuzzIntensity.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 2)
 
     private val _isAmbient = MutableStateFlow(false)
     fun setAmbient(ambient: Boolean) { _isAmbient.value = ambient }
@@ -174,18 +172,17 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private val _alert = MutableSharedFlow<WatchAlert>(extraBufferCapacity = 2)
     val alert: SharedFlow<WatchAlert> = _alert.asSharedFlow()
 
-    val distractionThresholdMs: Long = 5 * 60 * 1000L
-
-    private var distractionAlerted = false
     private var pomodoroWorkAlerted = false
     private var pomodoroBreakAlerted = false
 
-    // Focus/Break check-in reminders — in-memory only, reset on phase transitions/restart
-    private var lastCheckInAt: Long = 0L
-    private var checkInSnoozedUntil: Long = 0L
-
     init {
         viewModelScope.launch { _handle.value = auth.fetchHandle() }
+        // Check-in reminders are scheduled by TimerForegroundService (so they fire even when the
+        // app/ViewModel is gone). Forward its events into our alert flow so the in-app dialog still
+        // shows whenever the UI is open.
+        viewModelScope.launch {
+            ReminderBus.alerts.collect { _alert.tryEmit(it) }
+        }
         viewModelScope.launch {
             db.activeStateDao().get()?.let { e ->
                 _active.value = Active(
@@ -198,7 +195,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                     accumulatedBreakMs = e.accumulatedBreakMs,
                     pomodoroWorkBaseMs = e.pomodoroWorkBaseMs,
                 )
-                lastCheckInAt = System.currentTimeMillis()
+                // Re-anchor the check-in interval to now so a stale timestamp can't fire instantly.
+                settings.setCheckInLastAt(System.currentTimeMillis())
             }
         }
         viewModelScope.launch {
@@ -231,34 +229,24 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Pomodoro phase alerts only. Check-in reminders are owned by TimerForegroundService so they
+    // fire even when the app is closed (see ReminderBus).
     private fun checkAlerts(now: Long) {
         val a = _active.value ?: run {
-            distractionAlerted = false
             pomodoroWorkAlerted = false
             pomodoroBreakAlerted = false
             return
         }
 
-        var firedOther = false
-
         if (a.phase == TimerPhase.PAUSED) {
             val breakMs = a.breakElapsed(now)
-            // Distraction threshold (non-Pomodoro manual pause)
-            if (!pomodoroEnabled.value && !distractionAlerted && breakMs >= distractionThresholdMs) {
-                distractionAlerted = true
-                _alert.tryEmit(WatchAlert.DistractionThreshold)
-                vibrate()
-                firedOther = true
-            }
             // Pomodoro break done → vibrate 3× and start counting overflow as distraction
             if (pomodoroEnabled.value && !pomodoroBreakAlerted && breakMs >= pomodoroBreakMs.value) {
                 pomodoroBreakAlerted = true
                 _alert.tryEmit(WatchAlert.PomodoroBreakDone)
                 vibrateTripleGroup()
-                firedOther = true
             }
         } else {
-            distractionAlerted = false
             pomodoroBreakAlerted = false
         }
 
@@ -271,21 +259,9 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 vibrate()
                 // Auto-start the break (enters PAUSED, same mechanics as a manual pause)
                 pause()
-                firedOther = true
             }
         } else if (a.phase == TimerPhase.PAUSED) {
             pomodoroWorkAlerted = false
-        }
-
-        // Focus/Break check-in reminders — independent of Pomodoro, skipped if another alert
-        // already fired this tick (avoids overlapping vibrations/dialogs).
-        if (checkInEnabled.value && !firedOther && now >= checkInSnoozedUntil) {
-            val intervalMs = if (a.phase == TimerPhase.RUNNING) checkInFocusMs.value else checkInBreakMs.value
-            if (now - lastCheckInAt >= intervalMs) {
-                lastCheckInAt = now
-                _alert.tryEmit(if (a.phase == TimerPhase.RUNNING) WatchAlert.FocusCheckIn else WatchAlert.BreakCheckIn)
-                vibrateCheckIn()
-            }
         }
     }
 
@@ -305,13 +281,12 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         )
         pomodoroWorkAlerted = false
         pomodoroBreakAlerted = false
-        distractionAlerted = false
-        lastCheckInAt = now
-        checkInSnoozedUntil = 0L
         persist()
         TimerForegroundService.start(getApplication())
         vibrateSingle()
         viewModelScope.launch {
+            settings.setCheckInLastAt(now)
+            settings.setCheckInSnoozedUntil(0L)
             settings.setLastCategoryId(category.id)
             settings.pushRecentCategory(category.id)
         }
@@ -330,7 +305,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         if (a.phase != TimerPhase.RUNNING) return
         val now = System.currentTimeMillis()
         _active.value = a.copy(runningSince = null, breakStartedAt = now)
-        lastCheckInAt = now
+        // Restart the check-in interval at the pause moment so break reminders pace from "now".
+        viewModelScope.launch { settings.setCheckInLastAt(now) }
         persist()
     }
 
@@ -353,9 +329,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             resumed
         }
-        distractionAlerted = false
         pomodoroBreakAlerted = false
-        lastCheckInAt = now
+        viewModelScope.launch { settings.setCheckInLastAt(now) }
         persist()
     }
 
@@ -411,12 +386,17 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleCheckIn()                 { viewModelScope.launch { settings.setCheckInEnabled(!checkInEnabled.value) } }
     fun updateCheckInFocusMin(min: Int) { viewModelScope.launch { settings.setCheckInFocusMin(min) } }
     fun updateCheckInBreakMin(min: Int) { viewModelScope.launch { settings.setCheckInBreakMin(min) } }
+    fun updateCheckInBuzzCount(n: Int)  { viewModelScope.launch { settings.setCheckInBuzzCount(n) } }
+    /** Cycle Light → Medium → Strong → Light. */
+    fun cycleCheckInBuzzIntensity()     { viewModelScope.launch { settings.setCheckInBuzzIntensity((checkInBuzzIntensity.value + 1) % 3) } }
 
     /** Suppress check-in reminders for 10 minutes; the next one fires 10 min from now. */
     fun snoozeCheckIn() {
         val now = System.currentTimeMillis()
-        checkInSnoozedUntil = now + CHECKIN_SNOOZE_MS
-        lastCheckInAt = now
+        viewModelScope.launch {
+            settings.setCheckInSnoozedUntil(now + CHECKIN_SNOOZE_MS)
+            settings.setCheckInLastAt(now)
+        }
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
@@ -469,10 +449,11 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         _active.value = null
         pomodoroWorkAlerted = false
         pomodoroBreakAlerted = false
-        distractionAlerted = false
-        lastCheckInAt = 0L
-        checkInSnoozedUntil = 0L
-        viewModelScope.launch { db.activeStateDao().clear() }
+        viewModelScope.launch {
+            settings.setCheckInLastAt(0L)
+            settings.setCheckInSnoozedUntil(0L)
+            db.activeStateDao().clear()
+        }
         TimerForegroundService.stop(getApplication())
     }
 
@@ -512,19 +493,6 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
             val pulse   = longArrayOf(0, 150, 80, 150, 80, 150)
             val gap     = longArrayOf(1_000)
             val pattern = pulse + gap + pulse + gap + pulse
-            val vm = getApplication<Application>()
-                .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vm.defaultVibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
-        }
-    }
-
-    /** Check-in reminder: two groups of two quick pulses, ~1s total — distinct from vibrate(),
-     *  vibrateTripleGroup(), and vibrateSingle(). */
-    private fun vibrateCheckIn() {
-        runCatching {
-            val pulse   = longArrayOf(0, 100, 100, 100)
-            val gap     = longArrayOf(500)
-            val pattern = pulse + gap + pulse
             val vm = getApplication<Application>()
                 .getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vm.defaultVibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))

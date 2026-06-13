@@ -105,8 +105,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.categories;
 DO $$
 BEGIN
   INSERT INTO public.user_profiles (user_id, handle, email)
-  SELECT id, 'nlal029', email FROM auth.users WHERE email = 'nayanlal029@gmail.com'
-  ON CONFLICT (user_id) DO UPDATE SET handle = 'nlal029';
+  SELECT id, 'nlal', email FROM auth.users WHERE email = 'nayanlal029@gmail.com'
+  ON CONFLICT (user_id) DO UPDATE SET handle = 'nlal';
 END $$;
 
 -- ============================================================================

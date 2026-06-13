@@ -17,6 +17,7 @@ import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserSession
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -142,7 +143,9 @@ class AuthManager(context: Context) {
     suspend fun signInWithHandle(handle: String, password: String): Result<Unit> = runCatching<Unit> {
         val profile = SupabaseProvider.client
             .from("user_profiles")
-            .select { filter { eq("handle", handle.trim().lowercase()) } }
+            .select(columns = Columns.list("email", "handle")) {
+                filter { eq("handle", handle.trim().lowercase()) }
+            }
             .decodeSingleOrNull<UserProfile>()
             ?: throw IllegalArgumentException("User ID '${handle.trim()}' not found")
         auth.signInWith(Email) {
@@ -159,7 +162,9 @@ class AuthManager(context: Context) {
         val uid = currentUserId() ?: return@runCatching null
         SupabaseProvider.client
             .from("user_profiles")
-            .select { filter { eq("user_id", uid) } }
+            .select(columns = Columns.list("email", "handle")) {
+                filter { eq("user_id", uid) }
+            }
             .decodeSingleOrNull<UserProfile>()
             ?.handle
     }.getOrNull()

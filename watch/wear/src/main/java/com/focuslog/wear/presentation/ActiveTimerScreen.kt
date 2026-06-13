@@ -58,6 +58,10 @@ fun ActiveTimerScreen(
     onPauseResume: () -> Unit,
     onStop: () -> Unit,
     onSnoozeCheckIn: () -> Unit,
+    // Set when the screen is opened from a reminder notification (app was closed) so the matching
+    // dialog appears immediately, without relying on flow timing.
+    initialAlert: WatchAlert? = null,
+    onInitialAlertShown: () -> Unit = {},
 ) {
     val paused = active.phase == TimerPhase.PAUSED
     val focusMs = active.focusElapsed(now)
@@ -82,16 +86,26 @@ fun ActiveTimerScreen(
     // Alert dialog state
     var alertMessage by remember { mutableStateOf<String?>(null) }
     var currentAlert by remember { mutableStateOf<WatchAlert?>(null) }
+    val messageFor: (WatchAlert) -> String = { alert ->
+        when (alert) {
+            WatchAlert.PomodoroWorkDone -> "${fmtDuration(pomodoroWorkMs)} done!\nTake a break."
+            WatchAlert.PomodoroBreakDone -> "Break over!\nTime to focus."
+            WatchAlert.FocusCheckIn -> "Still focusing on\n${active.categoryName}?"
+            WatchAlert.BreakCheckIn -> "Back to work?"
+        }
+    }
     LaunchedEffect(alertFlow) {
         alertFlow.collect { alert ->
             currentAlert = alert
-            alertMessage = when (alert) {
-                WatchAlert.DistractionThreshold -> "5 min break!\nBack to work?"
-                WatchAlert.PomodoroWorkDone -> "${fmtDuration(pomodoroWorkMs)} done!\nTake a break."
-                WatchAlert.PomodoroBreakDone -> "Break over!\nTime to focus."
-                WatchAlert.FocusCheckIn -> "Still focusing on\n${active.categoryName}?"
-                WatchAlert.BreakCheckIn -> "Still on break?"
-            }
+            alertMessage = messageFor(alert)
+        }
+    }
+    // Opened from a reminder notification → show that dialog right away.
+    LaunchedEffect(initialAlert) {
+        initialAlert?.let {
+            currentAlert = it
+            alertMessage = messageFor(it)
+            onInitialAlertShown()
         }
     }
 
@@ -136,8 +150,26 @@ fun ActiveTimerScreen(
 
     if (alertMessage != null) {
         val isCheckIn = currentAlert == WatchAlert.FocusCheckIn || currentAlert == WatchAlert.BreakCheckIn
+        val isBreakAlert = currentAlert == WatchAlert.BreakCheckIn || currentAlert == WatchAlert.PomodoroBreakDone
+        // Big live timer above the prompt: time-on-break for break prompts, focus time otherwise.
+        val dialogTimerMs = if (isBreakAlert) breakMs else focusMs
         Alert(
-            title = { Text("⏰ Alert", textAlign = TextAlign.Center) },
+            title = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = fmtHMS(dialogTimerMs),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 34.sp,
+                        color = if (isBreakAlert) FocusColors.Distraction else FocusColors.Focus,
+                    )
+                    Text(
+                        text = if (isBreakAlert) "on break" else "focusing",
+                        fontSize = 11.sp,
+                        color = FocusColors.Neutral,
+                    )
+                }
+            },
             negativeButton = {
                 Button(
                     onClick = {
@@ -147,35 +179,51 @@ fun ActiveTimerScreen(
                     },
                     colors = ButtonDefaults.secondaryButtonColors(),
                 ) {
-                    Icon(
-                        imageVector = if (isCheckIn) Icons.Filled.Snooze else Icons.Filled.Check,
-                        contentDescription = if (isCheckIn) "Snooze 10 min" else "Dismiss",
-                        modifier = Modifier.size(24.dp),
-                    )
+                    if (isCheckIn) {
+                        // Snooze 10 minutes — icon + "10" so the duration is obvious.
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Snooze,
+                                contentDescription = "Snooze 10 min",
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text("10", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = "Dismiss",
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                 }
             },
             positiveButton = {
                 Button(
                     onClick = {
-                        if (currentAlert != WatchAlert.FocusCheckIn) onPauseResume()
+                        // BreakCheckIn "Yes" = back to work (resume). FocusCheckIn "Yes" = keep
+                        // focusing (dismiss only — must NOT pause). Pomodoro alerts toggle as before.
+                        when (currentAlert) {
+                            WatchAlert.FocusCheckIn -> {}
+                            else -> onPauseResume()
+                        }
                         alertMessage = null
                         currentAlert = null
                     },
                     colors = ButtonDefaults.primaryButtonColors(),
                 ) {
-                    Icon(
-                        imageVector = when (currentAlert) {
-                            WatchAlert.FocusCheckIn -> Icons.Filled.Check
-                            WatchAlert.BreakCheckIn -> Icons.Filled.PlayArrow
-                            else -> if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause
-                        },
-                        contentDescription = when (currentAlert) {
-                            WatchAlert.FocusCheckIn -> "OK, still focusing"
-                            WatchAlert.BreakCheckIn -> "Resume"
-                            else -> if (paused) "Resume" else "Pause"
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
+                    if (isCheckIn) {
+                        Text("Yes", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Icon(
+                            imageVector = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (paused) "Resume" else "Pause",
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                 }
             },
         ) {

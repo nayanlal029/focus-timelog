@@ -51,6 +51,8 @@ fun HomeScreen(
     checkInEnabled: Boolean,
     checkInFocusMin: Int,
     checkInBreakMin: Int,
+    checkInBuzzCount: Int,
+    checkInBuzzIntensity: Int,
     recentCategoryIds: List<String>,
     summaryVm: SummaryViewModel,
     signedInEmail: String?,
@@ -69,6 +71,8 @@ fun HomeScreen(
     onToggleCheckIn: () -> Unit,
     onCheckInFocusChange: (Int) -> Unit,
     onCheckInBreakChange: (Int) -> Unit,
+    onCheckInBuzzCountChange: (Int) -> Unit,
+    onCheckInBuzzIntensityCycle: () -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
 
@@ -97,6 +101,8 @@ fun HomeScreen(
                 checkInEnabled = checkInEnabled,
                 checkInFocusMin = checkInFocusMin,
                 checkInBreakMin = checkInBreakMin,
+                checkInBuzzCount = checkInBuzzCount,
+                checkInBuzzIntensity = checkInBuzzIntensity,
                 signedInEmail = signedInEmail,
                 signedInHandle = signedInHandle,
                 pendingCount = pendingCount,
@@ -109,6 +115,8 @@ fun HomeScreen(
                 onToggleCheckIn = onToggleCheckIn,
                 onCheckInFocusChange = onCheckInFocusChange,
                 onCheckInBreakChange = onCheckInBreakChange,
+                onCheckInBuzzCountChange = onCheckInBuzzCountChange,
+                onCheckInBuzzIntensityCycle = onCheckInBuzzIntensityCycle,
             )
         }
     }
@@ -267,6 +275,8 @@ private fun SettingsPage(
     checkInEnabled: Boolean,
     checkInFocusMin: Int,
     checkInBreakMin: Int,
+    checkInBuzzCount: Int,
+    checkInBuzzIntensity: Int,
     signedInEmail: String?,
     signedInHandle: String?,
     pendingCount: Int,
@@ -279,6 +289,8 @@ private fun SettingsPage(
     onToggleCheckIn: () -> Unit,
     onCheckInFocusChange: (Int) -> Unit,
     onCheckInBreakChange: (Int) -> Unit,
+    onCheckInBuzzCountChange: (Int) -> Unit,
+    onCheckInBuzzIntensityCycle: () -> Unit,
 ) {
     ScalingLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -364,6 +376,32 @@ private fun SettingsPage(
                 min = 1,
                 max = 15,
                 onChanged = onCheckInBreakChange,
+            )
+        }
+
+        item {
+            StepperRow(
+                label = "Buzz repeats",
+                value = checkInBuzzCount,
+                unit = "x",
+                step = 1,
+                min = 1,
+                max = 10,
+                onChanged = onCheckInBuzzCountChange,
+            )
+        }
+
+        item {
+            val intensityLabel = when (checkInBuzzIntensity) {
+                0 -> "Light"
+                1 -> "Medium"
+                else -> "Strong"
+            }
+            Chip(
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("〜 Buzz strength: $intensityLabel") },
+                colors = ChipDefaults.secondaryChipColors(),
+                onClick = onCheckInBuzzIntensityCycle,
             )
         }
 

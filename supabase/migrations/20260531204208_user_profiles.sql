@@ -18,10 +18,10 @@ CREATE POLICY "own profile update"   ON public.user_profiles FOR UPDATE USING (a
 CREATE TRIGGER user_profiles_touch BEFORE UPDATE ON public.user_profiles
   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
--- Seed nlal029 for nayanlal029@gmail.com (idempotent; no-op if user doesn't exist yet)
+-- Seed nlal for nayanlal029@gmail.com (idempotent; no-op if user doesn't exist yet)
 DO $$
 BEGIN
   INSERT INTO public.user_profiles (user_id, handle, email)
-  SELECT id, 'nlal029', email FROM auth.users WHERE email = 'nayanlal029@gmail.com'
-  ON CONFLICT (user_id) DO UPDATE SET handle = 'nlal029';
+  SELECT id, 'nlal', email FROM auth.users WHERE email = 'nayanlal029@gmail.com'
+  ON CONFLICT (user_id) DO UPDATE SET handle = 'nlal';
 END $$;
