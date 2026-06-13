@@ -141,6 +141,9 @@ class MainActivity : ComponentActivity() {
         val pomodoroWorkMin by timerVm.pomodoroWorkMin.collectAsStateWithLifecycle()
         val pomodoroBreakMin by timerVm.pomodoroBreakMin.collectAsStateWithLifecycle()
         val sleepAfterSec    by timerVm.sleepAfterSec.collectAsStateWithLifecycle()
+        val checkInEnabled   by timerVm.checkInEnabled.collectAsStateWithLifecycle()
+        val checkInFocusMin  by timerVm.checkInFocusMin.collectAsStateWithLifecycle()
+        val checkInBreakMin  by timerVm.checkInBreakMin.collectAsStateWithLifecycle()
         val recentCategoryIds by timerVm.recentCategoryIds.collectAsStateWithLifecycle()
         val pendingCount by timerVm.pendingCount.collectAsStateWithLifecycle()
         val handle by timerVm.handle.collectAsStateWithLifecycle()
@@ -157,6 +160,9 @@ class MainActivity : ComponentActivity() {
                     pomodoroWorkMin = pomodoroWorkMin,
                     pomodoroBreakMin = pomodoroBreakMin,
                     sleepAfterSec = sleepAfterSec,
+                    checkInEnabled = checkInEnabled,
+                    checkInFocusMin = checkInFocusMin,
+                    checkInBreakMin = checkInBreakMin,
                     recentCategoryIds = recentCategoryIds,
                     summaryVm = summaryVm,
                     signedInEmail = signedInEmail,
@@ -180,6 +186,9 @@ class MainActivity : ComponentActivity() {
                     onPomodoroWorkChange = timerVm::updatePomodoroWork,
                     onPomodoroBreakChange = timerVm::updatePomodoroBreak,
                     onSleepChange = timerVm::updateSleepSec,
+                    onToggleCheckIn = timerVm::toggleCheckIn,
+                    onCheckInFocusChange = timerVm::updateCheckInFocusMin,
+                    onCheckInBreakChange = timerVm::updateCheckInBreakMin,
                 )
             }
 
@@ -200,6 +209,7 @@ class MainActivity : ComponentActivity() {
                             if (a.phase == TimerPhase.RUNNING) timerVm.pause() else timerVm.resume()
                         },
                         onStop = { nav.navigate(Routes.STOP) },
+                        onSnoozeCheckIn = timerVm::snoozeCheckIn,
                     )
                 }
             }

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -56,6 +57,7 @@ fun ActiveTimerScreen(
     alertFlow: SharedFlow<WatchAlert>,
     onPauseResume: () -> Unit,
     onStop: () -> Unit,
+    onSnoozeCheckIn: () -> Unit,
 ) {
     val paused = active.phase == TimerPhase.PAUSED
     val focusMs = active.focusElapsed(now)
@@ -79,12 +81,16 @@ fun ActiveTimerScreen(
 
     // Alert dialog state
     var alertMessage by remember { mutableStateOf<String?>(null) }
+    var currentAlert by remember { mutableStateOf<WatchAlert?>(null) }
     LaunchedEffect(alertFlow) {
         alertFlow.collect { alert ->
+            currentAlert = alert
             alertMessage = when (alert) {
                 WatchAlert.DistractionThreshold -> "5 min break!\nBack to work?"
                 WatchAlert.PomodoroWorkDone -> "${fmtDuration(pomodoroWorkMs)} done!\nTake a break."
                 WatchAlert.PomodoroBreakDone -> "Break over!\nTime to focus."
+                WatchAlert.FocusCheckIn -> "Still focusing on\n${active.categoryName}?"
+                WatchAlert.BreakCheckIn -> "Still on break?"
             }
         }
     }
@@ -129,28 +135,45 @@ fun ActiveTimerScreen(
     }
 
     if (alertMessage != null) {
+        val isCheckIn = currentAlert == WatchAlert.FocusCheckIn || currentAlert == WatchAlert.BreakCheckIn
         Alert(
             title = { Text("⏰ Alert", textAlign = TextAlign.Center) },
             negativeButton = {
                 Button(
-                    onClick = { alertMessage = null },
+                    onClick = {
+                        if (isCheckIn) onSnoozeCheckIn()
+                        alertMessage = null
+                        currentAlert = null
+                    },
                     colors = ButtonDefaults.secondaryButtonColors(),
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = "Dismiss",
+                        imageVector = if (isCheckIn) Icons.Filled.Snooze else Icons.Filled.Check,
+                        contentDescription = if (isCheckIn) "Snooze 10 min" else "Dismiss",
                         modifier = Modifier.size(24.dp),
                     )
                 }
             },
             positiveButton = {
                 Button(
-                    onClick = { alertMessage = null; onPauseResume() },
+                    onClick = {
+                        if (currentAlert != WatchAlert.FocusCheckIn) onPauseResume()
+                        alertMessage = null
+                        currentAlert = null
+                    },
                     colors = ButtonDefaults.primaryButtonColors(),
                 ) {
                     Icon(
-                        imageVector = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                        contentDescription = if (paused) "Resume" else "Pause",
+                        imageVector = when (currentAlert) {
+                            WatchAlert.FocusCheckIn -> Icons.Filled.Check
+                            WatchAlert.BreakCheckIn -> Icons.Filled.PlayArrow
+                            else -> if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause
+                        },
+                        contentDescription = when (currentAlert) {
+                            WatchAlert.FocusCheckIn -> "OK, still focusing"
+                            WatchAlert.BreakCheckIn -> "Resume"
+                            else -> if (paused) "Resume" else "Pause"
+                        },
                         modifier = Modifier.size(24.dp),
                     )
                 }

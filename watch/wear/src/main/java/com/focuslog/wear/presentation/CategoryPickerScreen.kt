@@ -48,6 +48,9 @@ fun HomeScreen(
     pomodoroWorkMin: Int,
     pomodoroBreakMin: Int,
     sleepAfterSec: Int,
+    checkInEnabled: Boolean,
+    checkInFocusMin: Int,
+    checkInBreakMin: Int,
     recentCategoryIds: List<String>,
     summaryVm: SummaryViewModel,
     signedInEmail: String?,
@@ -63,6 +66,9 @@ fun HomeScreen(
     onPomodoroWorkChange: (Int) -> Unit,
     onPomodoroBreakChange: (Int) -> Unit,
     onSleepChange: (Int) -> Unit,
+    onToggleCheckIn: () -> Unit,
+    onCheckInFocusChange: (Int) -> Unit,
+    onCheckInBreakChange: (Int) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
 
@@ -88,6 +94,9 @@ fun HomeScreen(
                 pomodoroWorkMin = pomodoroWorkMin,
                 pomodoroBreakMin = pomodoroBreakMin,
                 sleepAfterSec = sleepAfterSec,
+                checkInEnabled = checkInEnabled,
+                checkInFocusMin = checkInFocusMin,
+                checkInBreakMin = checkInBreakMin,
                 signedInEmail = signedInEmail,
                 signedInHandle = signedInHandle,
                 pendingCount = pendingCount,
@@ -97,6 +106,9 @@ fun HomeScreen(
                 onPomodoroWorkChange = onPomodoroWorkChange,
                 onPomodoroBreakChange = onPomodoroBreakChange,
                 onSleepChange = onSleepChange,
+                onToggleCheckIn = onToggleCheckIn,
+                onCheckInFocusChange = onCheckInFocusChange,
+                onCheckInBreakChange = onCheckInBreakChange,
             )
         }
     }
@@ -252,6 +264,9 @@ private fun SettingsPage(
     pomodoroWorkMin: Int,
     pomodoroBreakMin: Int,
     sleepAfterSec: Int,
+    checkInEnabled: Boolean,
+    checkInFocusMin: Int,
+    checkInBreakMin: Int,
     signedInEmail: String?,
     signedInHandle: String?,
     pendingCount: Int,
@@ -261,6 +276,9 @@ private fun SettingsPage(
     onPomodoroWorkChange: (Int) -> Unit,
     onPomodoroBreakChange: (Int) -> Unit,
     onSleepChange: (Int) -> Unit,
+    onToggleCheckIn: () -> Unit,
+    onCheckInFocusChange: (Int) -> Unit,
+    onCheckInBreakChange: (Int) -> Unit,
 ) {
     ScalingLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -310,6 +328,42 @@ private fun SettingsPage(
                 min = 3,
                 max = 60,
                 onChanged = onSleepChange,
+            )
+        }
+
+        // ── Check-in reminders ──────────────────────────────────────────────
+        item { ListHeader { Text("Check-in Reminders") } }
+
+        item {
+            Chip(
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(if (checkInEnabled) "🔔 Check-ins ON" else "🔔 Check-ins OFF") },
+                colors = if (checkInEnabled) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
+                onClick = onToggleCheckIn,
+            )
+        }
+
+        item {
+            StepperRow(
+                label = "Focus check-in",
+                value = checkInFocusMin,
+                unit = "min",
+                step = 1,
+                min = 1,
+                max = 30,
+                onChanged = onCheckInFocusChange,
+            )
+        }
+
+        item {
+            StepperRow(
+                label = "Break check-in",
+                value = checkInBreakMin,
+                unit = "min",
+                step = 1,
+                min = 1,
+                max = 15,
+                onChanged = onCheckInBreakChange,
             )
         }
 
