@@ -82,8 +82,7 @@ export function LoginScreen() {
         toast.error(error.message);
         setBusy(false);
       }
-      // On success the browser is redirected to Google; on return the auth
-      // listener in AuthProvider picks up the session.
+      // If redirected, browser navigates away; if tokens received, auth listener picks it up.
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Google sign-in failed");
       setBusy(false);
