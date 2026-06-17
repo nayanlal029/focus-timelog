@@ -202,6 +202,7 @@ function SettingsScreen() {
       />
       <ExportSheet open={exportOpen} onOpenChange={setExportOpen} />
       <ChromeImportSheet open={importOpen} onOpenChange={setImportOpen} />
+      <RangeDeleteSheet open={rangeDeleteOpen} onOpenChange={setRangeDeleteOpen} blocks={blocks} deleteBlocks={deleteBlocks} />
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent className="max-w-[92vw] rounded-2xl">
