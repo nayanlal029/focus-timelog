@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, BellRing, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Calendar, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -31,13 +31,14 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsScreen() {
-  const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData } = useFocusLog();
+  const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData, deleteBlocks } = useFocusLog();
   const { user, guest, exitGuest, signOut } = useAuth();
   const [editing, setEditing] = useState<Category | null>(null);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [rangeDeleteOpen, setRangeDeleteOpen] = useState(false);
   const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
   const [pauseAlerts, setPauseAlerts] = useState<boolean>(() => loadPauseAlerts());
   useEffect(() => { savePomodoro(pomo); }, [pomo]);
@@ -114,6 +115,12 @@ function SettingsScreen() {
           </Button>
           <Button variant="outline" className="justify-start" onClick={() => setExportOpen(true)}>
             <Download className="h-4 w-4" /> Export to Excel
+          </Button>
+          <Button asChild variant="outline" className="justify-start">
+            <Link to="/calendar"><Calendar className="h-4 w-4" /> Calendar view (desktop)</Link>
+          </Button>
+          <Button variant="outline" className="justify-start text-distraction hover:text-distraction" onClick={() => setRangeDeleteOpen(true)}>
+            <Trash2 className="h-4 w-4" /> Delete entries in date range
           </Button>
           <Button variant="outline" className="justify-start text-distraction hover:text-distraction" onClick={() => setConfirmClear(true)}>
             <Trash2 className="h-4 w-4" /> Delete all data
