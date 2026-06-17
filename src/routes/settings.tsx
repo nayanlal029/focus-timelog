@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, BellRing, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Calendar, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -31,13 +31,14 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsScreen() {
-  const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData } = useFocusLog();
+  const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData, deleteBlocks } = useFocusLog();
   const { user, guest, exitGuest, signOut } = useAuth();
   const [editing, setEditing] = useState<Category | null>(null);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [rangeDeleteOpen, setRangeDeleteOpen] = useState(false);
   const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
   const [pauseAlerts, setPauseAlerts] = useState<boolean>(() => loadPauseAlerts());
   useEffect(() => { savePomodoro(pomo); }, [pomo]);
@@ -114,6 +115,12 @@ function SettingsScreen() {
           </Button>
           <Button variant="outline" className="justify-start" onClick={() => setExportOpen(true)}>
             <Download className="h-4 w-4" /> Export to Excel
+          </Button>
+          <Button asChild variant="outline" className="justify-start">
+            <Link to="/calendar"><Calendar className="h-4 w-4" /> Calendar view (desktop)</Link>
+          </Button>
+          <Button variant="outline" className="justify-start text-distraction hover:text-distraction" onClick={() => setRangeDeleteOpen(true)}>
+            <Trash2 className="h-4 w-4" /> Delete entries in date range
           </Button>
           <Button variant="outline" className="justify-start text-distraction hover:text-distraction" onClick={() => setConfirmClear(true)}>
             <Trash2 className="h-4 w-4" /> Delete all data
@@ -195,6 +202,7 @@ function SettingsScreen() {
       />
       <ExportSheet open={exportOpen} onOpenChange={setExportOpen} />
       <ChromeImportSheet open={importOpen} onOpenChange={setImportOpen} />
+      <RangeDeleteSheet open={rangeDeleteOpen} onOpenChange={setRangeDeleteOpen} blocks={blocks} deleteBlocks={deleteBlocks} />
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent className="max-w-[92vw] rounded-2xl">
@@ -286,6 +294,90 @@ function ExportSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
             <Download className="h-4 w-4" /> Download .xlsx
           </Button>
         </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function RangeDeleteSheet({ open, onOpenChange, blocks, deleteBlocks }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  blocks: import("@/lib/focuslog/types").TimeBlock[];
+  deleteBlocks: (ids: string[]) => void;
+}) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [onlyImported, setOnlyImported] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const matching = (() => {
+    if (!from || !to) return [] as string[];
+    const s = new Date(from + "T00:00:00").getTime();
+    const e = new Date(to + "T23:59:59").getTime();
+    if (!isFinite(s) || !isFinite(e) || e < s) return [];
+    return blocks
+      .filter((b) => b.start >= s && b.start <= e)
+      .filter((b) => (onlyImported ? !!b.link : true))
+      .map((b) => b.id);
+  })();
+
+  const submit = () => {
+    if (!matching.length) return;
+    deleteBlocks(matching);
+    toast.success(`Deleted ${matching.length} entries.`);
+    setConfirming(false);
+    onOpenChange(false);
+    setFrom(""); setTo("");
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-3xl border-t border-border">
+        <SheetHeader className="text-left">
+          <SheetTitle>Delete entries in date range</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 pt-3 pb-6">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="rd-from">From</Label>
+              <Input id="rd-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rd-to">To</Label>
+              <Input id="rd-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-3">
+            <Label htmlFor="rd-imp" className="text-sm">Only browser/CSV imports</Label>
+            <Switch id="rd-imp" checked={onlyImported} onCheckedChange={setOnlyImported} />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {from && to ? `${matching.length} entries will be deleted.` : "Pick a date range."}
+          </p>
+          <Button
+            className="w-full bg-distraction text-distraction-foreground hover:bg-distraction/90"
+            disabled={!matching.length}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 className="h-4 w-4" /> Delete {matching.length || ""} entries
+          </Button>
+        </div>
+        <AlertDialog open={confirming} onOpenChange={setConfirming}>
+          <AlertDialogContent className="max-w-[92vw] rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {matching.length} entries?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Entries from {from} to {to}{onlyImported ? " (imports only)" : ""} will be permanently removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={submit} className="bg-distraction text-distraction-foreground hover:bg-distraction/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
