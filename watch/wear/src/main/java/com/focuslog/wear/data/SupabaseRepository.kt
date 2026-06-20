@@ -1,6 +1,7 @@
 package com.focuslog.wear.data
 
 import android.content.Context
+import android.util.Log
 import com.focuslog.wear.data.local.CategoryEntity
 import com.focuslog.wear.data.local.PendingBlockEntity
 import com.focuslog.wear.data.local.WatchDatabase
@@ -65,18 +66,22 @@ class SupabaseRepository(context: Context) {
 
     /** Flush queued blocks to Supabase. Stops at first failure (retry by SyncWorker). */
     suspend fun flushPending(): Result<Int> = runCatching {
+        val pending = db.pendingBlockDao().getAll()
+        Log.i(TAG, "flushPending: ${pending.size} block(s) queued")
         var sent = 0
-        for (p in db.pendingBlockDao().getAll()) {
-            val ok = runCatching {
+        for (p in pending) {
+            try {
                 client.from("time_blocks").insert(p.toInsert())
-            }.isSuccess
-            if (ok) {
                 db.pendingBlockDao().delete(p.id)
                 sent++
-            } else {
-                break  // leave remaining in queue for SyncWorker to retry
+            } catch (e: Exception) {
+                // Surface *why* an upload failed (bad config / DNS, auth-RLS 401, enum, …) so it is
+                // diagnosable via `adb logcat -s FocusLogSync` instead of failing silently.
+                Log.w(TAG, "Upload failed for block ${p.id} (user=${p.userId}): ${e.message}", e)
+                throw e  // bubble up so SyncWorker schedules a retry; rest stay queued
             }
         }
+        Log.i(TAG, "flushPending: sent $sent, ${db.pendingBlockDao().count()} still queued")
         sent
     }
 
@@ -107,4 +112,8 @@ class SupabaseRepository(context: Context) {
         id = id, userId = userId, categoryId = categoryId, categoryName = categoryName,
         type = type, startMs = startMs, endMs = endMs, isBreak = isBreak,
     )
+
+    private companion object {
+        const val TAG = "FocusLogSync"
+    }
 }
