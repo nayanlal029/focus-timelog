@@ -12,7 +12,8 @@ import java.util.UUID
 
 class SupabaseRepository(context: Context) {
 
-    private val db = WatchDatabase.get(context)
+    private val appContext = context.applicationContext
+    private val db = WatchDatabase.get(appContext)
     private val client = SupabaseProvider.client
 
     // ── Categories ────────────────────────────────────────────────────────────
@@ -57,6 +58,9 @@ class SupabaseRepository(context: Context) {
     suspend fun saveBlock(block: TimeBlockInsert) {
         db.pendingBlockDao().insert(block.toPending())
         flushPending()
+        // Whatever didn't upload immediately (offline, token not ready yet, transient error)
+        // must be retried in the background — otherwise it would sit in the queue forever.
+        if (db.pendingBlockDao().count() > 0) SyncWorker.enqueue(appContext)
     }
 
     /** Flush queued blocks to Supabase. Stops at first failure (retry by SyncWorker). */

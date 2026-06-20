@@ -113,18 +113,24 @@ class AuthManager(context: Context) {
         prefs.edit().clear().apply()
     }
 
-    fun currentUserId(): String? = auth.currentSessionOrNull()?.user?.id
+    fun currentUserId(): String? =
+        auth.currentSessionOrNull()?.user?.id ?: prefs.getString(KEY_USER_ID, null)
 
     private fun persistCurrent() {
         val s = auth.currentSessionOrNull() ?: return
-        prefs.edit()
+        val editor = prefs.edit()
             .putString(KEY_ACCESS, s.accessToken)
             .putString(KEY_REFRESH, s.refreshToken)
-            .apply()
+        // Keep the last known user id so a block logged before the session's user object is
+        // hydrated (right after restore, before the token refresh lands) is still attributed
+        // and queued instead of being silently dropped. Never clobber it with null.
+        s.user?.id?.let { editor.putString(KEY_USER_ID, it) }
+        editor.apply()
     }
 
     private companion object {
         const val KEY_ACCESS = "access_token"
         const val KEY_REFRESH = "refresh_token"
+        const val KEY_USER_ID = "user_id"
     }
 }
