@@ -1,6 +1,7 @@
 package com.focuslog.wear.data
 
 import android.content.Context
+import android.util.Log
 import com.focuslog.wear.data.local.CategoryEntity
 import com.focuslog.wear.data.local.PendingBlockEntity
 import com.focuslog.wear.data.local.WatchDatabase
@@ -12,7 +13,8 @@ import java.util.UUID
 
 class SupabaseRepository(context: Context) {
 
-    private val db = WatchDatabase.get(context)
+    private val appContext = context.applicationContext
+    private val db = WatchDatabase.get(appContext)
     private val client = SupabaseProvider.client
 
     // ── Categories ────────────────────────────────────────────────────────────
@@ -57,22 +59,33 @@ class SupabaseRepository(context: Context) {
     suspend fun saveBlock(block: TimeBlockInsert) {
         db.pendingBlockDao().insert(block.toPending())
         flushPending()
+        // Whatever didn't upload immediately (offline, token not ready yet, transient error)
+        // must be retried in the background — otherwise it would sit in the queue forever.
+        if (db.pendingBlockDao().count() > 0) SyncWorker.enqueue(appContext)
     }
 
     /** Flush queued blocks to Supabase. Stops at first failure (retry by SyncWorker). */
     suspend fun flushPending(): Result<Int> = runCatching {
+        val pending = db.pendingBlockDao().getAll()
+        Log.i(TAG, "flushPending: ${pending.size} block(s) queued")
         var sent = 0
-        for (p in db.pendingBlockDao().getAll()) {
-            val ok = runCatching {
-                client.from("time_blocks").insert(p.toInsert())
-            }.isSuccess
-            if (ok) {
+        for (p in pending) {
+            try {
+                // upsert (not insert) so a block that already reached Supabase — e.g. recovered
+                // manually, or inserted on a previous run whose local delete didn't land — is a
+                // harmless no-op on its (user_id, id) primary key instead of a duplicate-key error
+                // that would wedge the whole queue.
+                client.from("time_blocks").upsert(p.toInsert())
                 db.pendingBlockDao().delete(p.id)
                 sent++
-            } else {
-                break  // leave remaining in queue for SyncWorker to retry
+            } catch (e: Exception) {
+                // Surface *why* an upload failed (bad config / DNS, auth-RLS 401, enum, …) so it is
+                // diagnosable via `adb logcat -s FocusLogSync` instead of failing silently.
+                Log.w(TAG, "Upload failed for block ${p.id} (user=${p.userId}): ${e.message}", e)
+                throw e  // bubble up so SyncWorker schedules a retry; rest stay queued
             }
         }
+        Log.i(TAG, "flushPending: sent $sent, ${db.pendingBlockDao().count()} still queued")
         sent
     }
 
@@ -103,4 +116,8 @@ class SupabaseRepository(context: Context) {
         id = id, userId = userId, categoryId = categoryId, categoryName = categoryName,
         type = type, startMs = startMs, endMs = endMs, isBreak = isBreak,
     )
+
+    private companion object {
+        const val TAG = "FocusLogSync"
+    }
 }

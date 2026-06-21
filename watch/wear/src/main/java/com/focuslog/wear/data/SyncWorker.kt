@@ -1,6 +1,7 @@
 package com.focuslog.wear.data
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -22,14 +23,24 @@ class SyncWorker(appContext: Context, params: WorkerParameters) :
         val result = repo.flushPending()
         val remaining = repo.pendingCount()
         return when {
-            result.isFailure -> Result.retry()
-            remaining > 0 -> Result.retry()
-            else -> Result.success()
+            result.isFailure -> {
+                Log.w(TAG, "Sync attempt failed, $remaining queued — will retry", result.exceptionOrNull())
+                Result.retry()
+            }
+            remaining > 0 -> {
+                Log.i(TAG, "Sync sent some, $remaining still queued — will retry")
+                Result.retry()
+            }
+            else -> {
+                Log.i(TAG, "Sync complete — queue empty")
+                Result.success()
+            }
         }
     }
 
     companion object {
         private const val NAME = "focuslog_sync"
+        private const val TAG = "FocusLogSync"
 
         fun enqueue(context: Context) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
