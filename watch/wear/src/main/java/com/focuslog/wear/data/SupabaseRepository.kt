@@ -71,7 +71,11 @@ class SupabaseRepository(context: Context) {
         var sent = 0
         for (p in pending) {
             try {
-                client.from("time_blocks").insert(p.toInsert())
+                // upsert (not insert) so a block that already reached Supabase — e.g. recovered
+                // manually, or inserted on a previous run whose local delete didn't land — is a
+                // harmless no-op on its (user_id, id) primary key instead of a duplicate-key error
+                // that would wedge the whole queue.
+                client.from("time_blocks").upsert(p.toInsert())
                 db.pendingBlockDao().delete(p.id)
                 sent++
             } catch (e: Exception) {
