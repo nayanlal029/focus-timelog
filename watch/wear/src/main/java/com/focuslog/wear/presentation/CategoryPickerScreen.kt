@@ -58,6 +58,7 @@ fun HomeScreen(
     signedInEmail: String?,
     signedInHandle: String?,
     pendingCount: Int,
+    lastSyncedAt: Long,
     onStart: () -> Unit,
     onSelect: (Category) -> Unit,
     onResumeRunning: () -> Unit,
@@ -106,6 +107,7 @@ fun HomeScreen(
                 signedInEmail = signedInEmail,
                 signedInHandle = signedInHandle,
                 pendingCount = pendingCount,
+                lastSyncedAt = lastSyncedAt,
                 onTogglePomodoro = onTogglePomodoro,
                 onSummary = onSummary,
                 onRetrySync = onRetrySync,
@@ -280,6 +282,7 @@ private fun SettingsPage(
     signedInEmail: String?,
     signedInHandle: String?,
     pendingCount: Int,
+    lastSyncedAt: Long,
     onTogglePomodoro: () -> Unit,
     onSummary: () -> Unit,
     onRetrySync: () -> Unit,
@@ -439,6 +442,16 @@ private fun SettingsPage(
         }
 
         item {
+            Text(
+                text = if (lastSyncedAt > 0L) "Last synced ${syncedAgo(lastSyncedAt)}" else "Not synced yet",
+                fontSize = 11.sp,
+                color = FocusColors.Neutral,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            )
+        }
+
+        item {
             val label = if (pendingCount > 0) "⟳ Sync now ($pendingCount waiting)" else "✓ All synced"
             Chip(
                 modifier = Modifier.fillMaxWidth(),
@@ -447,6 +460,17 @@ private fun SettingsPage(
                 onClick = onRetrySync,
             )
         }
+    }
+}
+
+/** Coarse "x ago" label for the last successful sync, computed at composition time. */
+private fun syncedAgo(ts: Long): String {
+    val min = (System.currentTimeMillis() - ts).coerceAtLeast(0) / 60_000
+    return when {
+        min < 1L -> "just now"
+        min < 60L -> "${min}m ago"
+        min < 1440L -> "${min / 60}h ago"
+        else -> "${min / 1440}d ago"
     }
 }
 

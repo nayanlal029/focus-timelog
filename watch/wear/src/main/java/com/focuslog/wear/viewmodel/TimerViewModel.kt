@@ -147,8 +147,16 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     // Surfaced on the Settings page so the user can confirm which account they're synced as
     // and whether any logged blocks are still waiting to upload.
 
-    private val _pendingCount = MutableStateFlow(0)
-    val pendingCount: StateFlow<Int> = _pendingCount.asStateFlow()
+    // Live queue depth — updates automatically as blocks upload, including when the background
+    // SyncWorker drains them (same Room instance, so the observed query re-emits).
+    val pendingCount: StateFlow<Int> =
+        repo.observePendingCount()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /** Wall-clock time of the last successful upload (0 = never). */
+    val lastSyncedAt: StateFlow<Long> =
+        settings.lastSyncedAt
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     private val _handle = MutableStateFlow<String?>(null)
     val handle: StateFlow<String?> = _handle.asStateFlow()
@@ -156,15 +164,9 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     fun signedInEmail(): String? = auth.currentEmail()
     fun signedInHandle(): String? = _handle.value
 
+    /** Manual "Sync now": flush immediately; the reactive [pendingCount] reflects the result. */
     fun retrySync() {
-        viewModelScope.launch {
-            repo.flushPending()
-            refreshPending()
-        }
-    }
-
-    private fun refreshPending() {
-        viewModelScope.launch { _pendingCount.value = repo.pendingCount() }
+        viewModelScope.launch { repo.flushPending() }
     }
 
     // ── Alerts ────────────────────────────────────────────────────────────────
@@ -211,8 +213,6 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-
-        refreshPending()
 
         viewModelScope.launch {
             while (true) {
@@ -355,7 +355,6 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                         isBreak = false,
                     )
                 )
-                refreshPending()
             }
         }
         clearActive()
@@ -441,7 +440,6 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
                     isBreak = isBreak,
                 )
             )
-            refreshPending()
         }
     }
 

@@ -5,6 +5,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.focuslog.wear.auth.AuthManager
+import com.focuslog.wear.data.SyncWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,8 +25,16 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
-            _state.value = if (auth.restore()) AuthState.SIGNED_IN else AuthState.SIGNED_OUT
+            if (auth.restore()) onSignedIn() else _state.value = AuthState.SIGNED_OUT
         }
+    }
+
+    /** Mark the session active and kick the sync workers so any blocks queued on the watch
+     * (including ones stranded by earlier runs) drain now and stay drained going forward. */
+    private fun onSignedIn() {
+        _state.value = AuthState.SIGNED_IN
+        SyncWorker.enqueue(getApplication())
+        SyncWorker.enqueuePeriodic(getApplication())
     }
 
     /** Must be called from a Composable that has access to an Activity via LocalContext. */
@@ -35,7 +44,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = auth.signInWithGoogle(activity)
             if (result.isSuccess) {
-                _state.value = AuthState.SIGNED_IN
+                onSignedIn()
             } else {
                 _error.value = result.exceptionOrNull()?.message ?: "Sign-in failed"
                 _state.value = AuthState.SIGNED_OUT
@@ -50,7 +59,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = auth.signInWithEmail(email, password)
             if (result.isSuccess) {
-                _state.value = AuthState.SIGNED_IN
+                onSignedIn()
             } else {
                 _error.value = result.exceptionOrNull()?.message ?: "Sign-in failed"
                 _state.value = AuthState.SIGNED_OUT
@@ -65,7 +74,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = auth.signInWithHandle(handle, password)
             if (result.isSuccess) {
-                _state.value = AuthState.SIGNED_IN
+                onSignedIn()
             } else {
                 _error.value = result.exceptionOrNull()?.message ?: "Sign-in failed"
                 _state.value = AuthState.SIGNED_OUT
