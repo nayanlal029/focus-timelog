@@ -1,8 +1,9 @@
 # Focus-TimeLog — Product Document
 
-**Version:** 1.0 (Current)
+**Version:** 1.1 (Current)
 **Document Type:** Product Requirements & Feature Specification
 **Status:** Live / Production
+**Scope note:** Reflects features through the latest in-app changelog — Pomodoro, pause alerts, recurring reminders, and guest mode are all shipped. Runs as a server-rendered (TanStack Start) app on Cloudflare Workers, independent of the Lovable platform it was first built on.
 
 ---
 
@@ -96,8 +97,8 @@ Unlike conventional time-trackers that require rigid project/task hierarchies, F
 | Backend / DB | Supabase (PostgreSQL) |
 | Auth | Supabase Auth (email/password + native Supabase Google OAuth) |
 | Real-time | Supabase Realtime (postgres_changes) |
-| Build tool | Vite 7.3 + Cloudflare Pages plugin |
-| Hosting | Cloudflare Pages (via wrangler.jsonc) |
+| Build tool | Vite 7.3 + `@cloudflare/vite-plugin` |
+| Runtime / Hosting | Cloudflare **Workers** — SSR entry `src/server.ts` (via wrangler.jsonc) |
 | Export | ExcelJS |
 | Forms | react-hook-form + Zod |
 | Notifications | Sonner (toast system) |
@@ -569,6 +570,29 @@ Supabase Realtime channel
 
 ---
 
+### 6.12 Reminders, Pause Alerts & Pomodoro
+
+In-app nudges to keep sessions honest. All logic lives in
+`src/lib/focuslog/alerts.ts` (`useTimerAlerts`), which reads its config from
+localStorage **live** at each tick, so Settings changes apply without a remount.
+Every alert is delivered the same way — a Sonner **toast** + a short WebAudio
+**beep** + `navigator.vibrate` — and only while the app/tab is open (no OS push).
+
+| Feature | Storage key | Default | Behavior |
+|---------|-------------|---------|----------|
+| **Recurring reminders** | `focuslog.alerts.reminder` | on · 10 min focus / 5 min break | While a timer runs, buzzes every `focusEveryMin` ("Still on track?"); while paused, buzzes every `breakEveryMin`. |
+| **Pause alerts** | `focuslog.alerts.pause` | on | Master gate for the break/distraction reminders fired during a pause. |
+| **Pomodoro** | `focuslog.pomodoro` | off · 25 / 5 | When enabled, fires once `workMin` after a run starts ("time for a break") and once `breakMin` after a pause starts ("Break's over"). |
+
+Configured under **Settings** and on the **Today** screen. Independent of the
+Supabase account — settings are per-device (localStorage) and work in guest mode.
+
+> **Related shipped features** documented elsewhere: **Guest mode** (§6.1 — use the
+> app with no account, data stays local), the in-app **Changelog** route
+> (`/changelog`), and **category search** in History (§6.5).
+
+---
+
 ## 7. UX & Design Principles
 
 ### 7.1 Mobile-First
@@ -675,7 +699,7 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | **Row-Level Security** | All Supabase tables enforce `auth.uid() = user_id` on SELECT, INSERT, UPDATE, DELETE |
 | **Auth tokens** | Managed by Supabase Auth; refresh tokens stored in browser storage |
 | **Google OAuth** | Native Supabase OAuth; Google provider configured in the Supabase dashboard; app never sees Google credentials |
-| **No server-side processing** | App is a static SPA; no custom backend; no server-side logging of user data |
+| **Minimal server surface** | Server-rendered via TanStack Start on a Cloudflare Worker; no custom API backend beyond Supabase; no server-side logging of user data |
 | **Data deletion** | "Delete All Data" performs a hard delete on all user rows in both tables |
 | **Local data** | localStorage used only for ephemeral state (active timer, theme, filters); no PII stored locally |
 
@@ -722,7 +746,7 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | No overlap detection | Two blocks can be logged for the same time range (data integrity risk during Chrome import) |
 | No offline queue | DB writes fire-and-forget; a write that fails during offline is silently lost |
 | Category renames don't backfill | Historical blocks retain the old `category_name` snapshot |
-| No notifications / reminders | App cannot prompt users to start logging; relies on self-discipline |
+| In-app reminders only (no OS push) | Reminders, pause alerts, and Pomodoro fire via toast + beep + vibration only while the app/tab is open; no background OS push notifications |
 | Single user per account | No team/shared view |
 | Chrome import mapping is hardcoded | New domains require a code change to classify correctly; no user-configurable rules |
 | No merge functionality | UI scaffolding exists; merge operation is not yet implemented |
@@ -738,7 +762,7 @@ Errors are surfaced via Sonner toast notifications; DB errors do not roll back o
 | **Browser extension** | Log directly from Chrome without switching to the app |
 | **User-configurable import rules** | Let users map custom domains to their own categories |
 | **Block merging** | Merge consecutive same-category blocks into one |
-| **Pomodoro mode** | Built-in 25/5 timer with automatic break scheduling |
+| **OS push notifications** | Background alerts even when the app/tab is closed (current reminders are in-app only) |
 | **Team / manager view** | Aggregated reports for remote teams (opt-in, privacy-preserving) |
 | **Offline-first with sync queue** | Queue failed DB writes and replay on reconnect |
 | **API / Webhooks** | Let power users push data to Notion, Obsidian, or custom dashboards |

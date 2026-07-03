@@ -5,19 +5,22 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { cloudflare } from "@cloudflare/vite-plugin";
 
-// Standalone TanStack Start + Cloudflare Workers build. This previously imported
-// defineConfig from @lovable.dev/vite-tanstack-config, which bundled the plugins
-// below automatically; they are now declared explicitly so the project builds
-// with no Lovable dependency. The plugin set the wrapper provided (kept here for
-// reference) — do NOT add duplicates of the ones already listed below or the app
-// will break with duplicate plugins:
-//   - tanstackStart, viteReact, tailwindcss, tsConfigPaths, cloudflare (build-only),
-//     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
-//     error logger plugins, and sandbox detection (port/host/strictPort).
-// The dev-only / sandbox-only plugins (componentTagger, error loggers, sandbox
-// detection) are Lovable-specific and intentionally dropped. Vite loads `.env`
-// and exposes VITE_* via import.meta.env natively, and the @ path alias comes
-// from tsconfig.json via vite-tsconfig-paths.
+// Standalone TanStack Start + Cloudflare Workers build.
+//
+// This config previously came from @lovable.dev/vite-tanstack-config, which
+// bundled the Vite plugins automatically. They are now declared explicitly here
+// so the project builds with no Lovable dependency. For anyone editing this file:
+//
+//   ACTIVE (declared in `plugins` below — don't add duplicates or the build breaks):
+//     tailwindcss, tsConfigPaths, cloudflare, tanstackStart (with importProtection),
+//     viteReact — plus the React / TanStack Query `dedupe` in `resolve`.
+//   NATIVE (handled by Vite, no plugin needed):
+//     VITE_* env vars via import.meta.env; the `@` -> src alias via tsconfig.json
+//     (resolved by vite-tsconfig-paths).
+//   DROPPED (were Lovable/sandbox dev-only — intentionally NOT carried over, so
+//     don't expect them here): componentTagger, dev SSR/server-fn error loggers,
+//     HMR gate, dev-server bridge, sandbox detection (port/host/strictPort), and
+//     the nitro deploy plugin.
 
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
