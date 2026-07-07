@@ -94,12 +94,14 @@ function SettingsScreen() {
   };
 
   return (
-    <div className="flex flex-col gap-6 px-4 pt-6">
+    <div className="flex flex-col gap-6 px-4 pt-6 md:pt-10">
       <header>
         <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Settings</div>
         <h1 className="mt-1 text-2xl font-semibold">Preferences</h1>
       </header>
 
+      {/* Desktop: settings cards flow into two masonry columns */}
+      <div className="flex flex-col gap-6 md:block md:columns-2 md:gap-8 md:[&>section]:mb-8 md:[&>section]:break-inside-avoid">
       <section className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -253,7 +255,7 @@ function SettingsScreen() {
           <span className="text-xs text-muted-foreground">What's new →</span>
         </Link>
       </section>
-
+      </div>
 
       <CategoryDialog open={newCatOpen} onOpenChange={setNewCatOpen} />
       <CategoryDialog
@@ -310,7 +312,7 @@ function ExportSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     else if (range === "custom") {
       if (!from || !to) return;
       start = new Date(from + "T00:00:00").getTime();
-      end = new Date(to + "T23:59:59").getTime();
+      end = new Date(to + "T23:59:59.999").getTime();
     }
     const filtered = blocks.filter((b) => b.start >= start && b.start <= end);
     const stamp = new Date().toISOString().slice(0, 10);

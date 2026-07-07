@@ -66,7 +66,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const range = useMemo(() => {
     if (!state.from || !state.to) return null;
     const start = new Date(`${state.from}T${state.fromTime || "00:00"}:00`).getTime();
-    const end = new Date(`${state.to}T${state.toTime || "23:59"}:59`).getTime();
+    const end = new Date(`${state.to}T${state.toTime || "23:59"}:59.999`).getTime();
     if (isNaN(start) || isNaN(end) || end < start) return null;
     return { start, end };
   }, [state]);

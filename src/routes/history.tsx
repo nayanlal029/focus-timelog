@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Filter, Search, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { useFilter } from "@/lib/focuslog/filter-context";
 import { dayKey, fmtDuration } from "@/lib/focuslog/format";
-import { overlapMs } from "@/lib/focuslog/aggregate";
+import { overlapMs, eachLocalDay } from "@/lib/focuslog/aggregate";
 import { Timeline } from "@/components/focuslog/Timeline";
 import { HourGantt } from "@/components/focuslog/HourGantt";
 import { FilterPanel } from "@/components/focuslog/FilterPanel";
@@ -35,11 +35,12 @@ function HistoryScreen() {
   }, [blocks, range]);
 
   const filteredTotals = useMemo(() => {
-    const t = { focus: 0, distraction: 0, neutral: 0 };
+    const t = { focus: 0, distraction: 0, neutral: 0, break: 0 };
     if (!range) return t;
     filteredBlocks.forEach((b) => {
       const d = overlapMs(b.start, b.end, range.start, range.end);
-      if (b.type === "focus") t.focus += d;
+      if (b.isBreak) t.break += d;
+      else if (b.type === "focus") t.focus += d;
       else if (b.type === "distraction") t.distraction += d;
       else t.neutral += d;
     });
@@ -52,24 +53,22 @@ function HistoryScreen() {
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
 
   const blocksByDay = useMemo(() => {
-    const map = new Map<string, { focus: number; distraction: number; neutral: number; count: number }>();
+    const map = new Map<string, { focus: number; distraction: number; neutral: number; break: number; count: number }>();
     blocks.forEach((b) => {
-      const dStart = new Date(b.start); dStart.setHours(0, 0, 0, 0);
-      const dEnd = new Date(b.end); dEnd.setHours(0, 0, 0, 0);
-      const oneDay = 86400000;
-      for (let t = dStart.getTime(); t <= dEnd.getTime(); t += oneDay) {
-        const dayStart = t;
-        const dayEnd = t + oneDay - 1;
+      // Iterate the calendar days this block touches (end - 1: block ends are exclusive).
+      const days = eachLocalDay(b.start, Math.max(b.start, b.end - 1));
+      days.forEach(({ dayStart, dayEnd }, i) => {
         const ms = overlapMs(b.start, b.end, dayStart, dayEnd);
-        if (ms <= 0) continue;
-        const k = dayKey(t);
-        const cur = map.get(k) ?? { focus: 0, distraction: 0, neutral: 0, count: 0 };
-        if (b.type === "focus") cur.focus += ms;
+        if (ms <= 0) return;
+        const k = dayKey(dayStart);
+        const cur = map.get(k) ?? { focus: 0, distraction: 0, neutral: 0, break: 0, count: 0 };
+        if (b.isBreak) cur.break += ms;
+        else if (b.type === "focus") cur.focus += ms;
         else if (b.type === "distraction") cur.distraction += ms;
         else cur.neutral += ms;
-        if (t === dStart.getTime()) cur.count += 1;
+        if (i === 0 && !b.isBreak) cur.count += 1;
         map.set(k, cur);
-      }
+      });
     });
     return map;
   }, [blocks]);
@@ -81,19 +80,27 @@ function HistoryScreen() {
     cells.push({ day: d, key: dayKey(date.getTime()) });
   }
 
-  const selectedDayStart = new Date(selected + "T00:00:00").getTime();
-  const selectedDayEnd = selectedDayStart + 86400000 - 1;
+  const selectedDate = new Date(selected + "T00:00:00");
+  const selectedDayStart = selectedDate.getTime();
+  // Exclusive next-midnight boundary (DST-safe).
+  const selectedDayEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime();
   const q = deferredQuery.trim().toLowerCase();
   const dayBlocks = blocks.filter((b) => {
     if (overlapMs(b.start, b.end, selectedDayStart, selectedDayEnd) <= 0) return false;
     if (q && !b.categoryName.toLowerCase().includes(q)) return false;
     return true;
   });
+  // Day-clipped copies for the hour Gantt so cross-midnight blocks render only this day's segment.
+  const dayClippedBlocks = dayBlocks.map((b) => ({
+    ...b,
+    start: Math.max(b.start, selectedDayStart),
+    end: Math.min(b.end, selectedDayEnd),
+  }));
   const summary = blocksByDay.get(selected);
 
   return (
-    <div className="flex flex-col gap-6 px-4 pt-6">
-      <header>
+    <div className="flex flex-col gap-6 px-4 pt-6 md:pt-10">
+      <header className="md:max-w-[420px]">
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">History</div>
           <button
@@ -131,6 +138,8 @@ function HistoryScreen() {
 
       {filterOpen && <FilterPanel onView={() => setViewOpen(true)} />}
 
+      {/* Desktop: calendar fixed on the left, selected-day detail fills the rest */}
+      <div className="flex flex-col gap-6 md:grid md:grid-cols-[420px_minmax(0,1fr)] md:items-start md:gap-10">
       <div>
         <div className="grid grid-cols-7 gap-1 pb-2 text-center text-[10px] uppercase tracking-wider text-muted-foreground">
           {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -218,12 +227,12 @@ function HistoryScreen() {
 
         <div>
           <div className="mb-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Day timeline</div>
-          <HourGantt blocks={dayBlocks} dayStart={selectedDayStart} />
+          <HourGantt blocks={dayClippedBlocks} dayStart={selectedDayStart} />
         </div>
 
         <Timeline blocks={dayBlocks} emptyLabel={q ? `No "${q}" entries on this day.` : "Nothing logged on this day."} />
       </div>
-
+      </div>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">

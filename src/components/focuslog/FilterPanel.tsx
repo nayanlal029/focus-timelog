@@ -3,6 +3,7 @@ import { Download, Eye } from "lucide-react";
 import { useFilter } from "@/lib/focuslog/filter-context";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { fmtDuration } from "@/lib/focuslog/format";
+import { clipBlocks, sumByType } from "@/lib/focuslog/aggregate";
 import { exportBlocksToXlsx } from "@/lib/focuslog/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,23 +15,14 @@ export function FilterPanel({ onView }: { onView?: () => void }) {
 
   const filtered = useMemo(() => {
     if (!range) return [];
-    return blocks.filter((b) => b.start >= range.start && b.start <= range.end);
+    return clipBlocks(blocks, range.start, range.end);
   }, [blocks, range]);
 
-  const totals = useMemo(() => {
-    const t = { focus: 0, distraction: 0, neutral: 0 };
-    filtered.forEach((b) => {
-      const d = b.end - b.start;
-      if (b.type === "focus") t.focus += d;
-      else if (b.type === "distraction") t.distraction += d;
-      else t.neutral += d;
-    });
-    return t;
-  }, [filtered]);
+  const totals = useMemo(() => sumByType(filtered), [filtered]);
 
   const downloadFiltered = () => {
     if (!range || filtered.length === 0) return;
-    exportBlocksToXlsx(filtered, `focuslog-${from}_to_${to}.xlsx`);
+    exportBlocksToXlsx(filtered.map((f) => f.block), `focuslog-${from}_to_${to}.xlsx`);
   };
 
   return (

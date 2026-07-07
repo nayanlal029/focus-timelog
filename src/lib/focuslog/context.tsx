@@ -84,6 +84,23 @@ function categoryFromRow(r: DbCatRow): Category {
   return { id: r.id, name: r.name, type: r.type, order: r.order, builtin: r.builtin || undefined };
 }
 
+/** Fetches every time_blocks row, paging past PostgREST's per-request row limit. */
+async function fetchAllBlocks(): Promise<DbBlockRow[]> {
+  const PAGE = 1000;
+  const out: DbBlockRow[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data } = await supabase
+      .from("time_blocks")
+      .select("*")
+      .order("start_ms", { ascending: false })
+      .range(offset, offset + PAGE - 1);
+    const rows = (data ?? []) as DbBlockRow[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 export function FocusLogProvider({ children }: { children: ReactNode }) {
   const { user, ready: authReady, guest } = useAuth();
   const [ready, setReady] = useState(false);
@@ -124,14 +141,14 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     setSyncing(true);
     (async () => {
-      const [{ data: cats }, { data: blks }] = await Promise.all([
+      const [{ data: cats }, blks] = await Promise.all([
         supabase.from("categories").select("*").order("order", { ascending: true }),
-        supabase.from("time_blocks").select("*").order("start_ms", { ascending: false }),
+        fetchAllBlocks(),
       ]);
       if (cancelled) return;
 
       let catList = (cats ?? []).map(categoryFromRow);
-      let blockList = (blks ?? []).map(blockFromRow);
+      let blockList = blks.map(blockFromRow);
 
       // First-run: seed defaults from local storage if empty, else seed sample defaults
       if (catList.length === 0) {
