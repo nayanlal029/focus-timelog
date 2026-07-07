@@ -1,4 +1,4 @@
-package com.focuslog.wear.auth
+package com.focuslog.core.auth
 
 import android.app.Activity
 import android.content.Context
@@ -6,11 +6,11 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
-import com.focuslog.wear.BuildConfig
-import com.focuslog.wear.data.SupabaseProvider
+import com.focuslog.core.BuildConfig
+import com.focuslog.core.data.SupabaseProvider
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.focuslog.wear.data.UserProfile
+import com.focuslog.core.data.UserProfile
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -72,6 +72,32 @@ class AuthManager(context: Context) {
             false
         }
     }
+
+    /**
+     * Import a session delivered from another device (phone → watch credential handoff over the
+     * Wearable Data Layer). Same validation as [restore]: forces a real refresh so a bad token is
+     * rejected here rather than landing on the home screen with a session that can't read data.
+     */
+    suspend fun importTokens(accessToken: String, refreshToken: String): Boolean = runCatching {
+        auth.importSession(
+            UserSession(
+                accessToken = accessToken,
+                refreshToken = refreshToken,
+                expiresIn = 0L,
+                tokenType = "bearer",
+                user = null,
+            )
+        )
+        auth.refreshCurrentSession()
+        val valid = auth.currentSessionOrNull()?.user?.id != null
+        if (!valid) throw IllegalStateException("No valid session after refresh")
+        persistCurrent()
+        true
+    }.getOrElse { false }
+
+    /** Current (access, refresh) token pair, for pushing to the watch. Null when signed out. */
+    fun currentTokens(): Pair<String, String>? =
+        auth.currentSessionOrNull()?.let { it.accessToken to it.refreshToken }
 
     /**
      * Launch the Google credential picker. MUST be called from a live Activity context.

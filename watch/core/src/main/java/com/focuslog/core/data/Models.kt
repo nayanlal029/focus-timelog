@@ -1,4 +1,4 @@
-package com.focuslog.wear.data
+package com.focuslog.core.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -64,6 +64,32 @@ data class TimeBlockInsert(
 data class UserProfile(
     val email: String,
     val handle: String,
+)
+
+/** Full block row for list/edit screens (phone app). */
+@Serializable
+data class TimeBlockFull(
+    val id: String,
+    @SerialName("category_id") val categoryId: String,
+    @SerialName("category_name") val categoryName: String,
+    val type: String,
+    @SerialName("start_ms") val startMs: Long,
+    @SerialName("end_ms") val endMs: Long,
+    val note: String? = null,
+    @SerialName("is_break") val isBreak: Boolean = false,
+) {
+    val durationMs: Long get() = (endMs - startMs).coerceAtLeast(0)
+}
+
+/** Partial update shape for editing a block's times/category/note. */
+@Serializable
+data class TimeBlockUpdate(
+    @SerialName("category_id") val categoryId: String? = null,
+    @SerialName("category_name") val categoryName: String? = null,
+    val type: String? = null,
+    @SerialName("start_ms") val startMs: Long? = null,
+    @SerialName("end_ms") val endMs: Long? = null,
+    val note: String? = null,
 )
 
 /** Read-only shape for summary queries — only columns we aggregate over. */

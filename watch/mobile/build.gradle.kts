@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.focuslog.wear"
+    namespace = "com.focuslog.mobile"
     compileSdk = 35
 
     defaultConfig {
-        // Same applicationId as :mobile — required for the Wearable Data Layer (credential
+        // Same applicationId as :wear — required for the Wearable Data Layer (credential
         // handoff) and for shipping phone + watch under one Play Store listing.
         applicationId = "com.focuslog.app"
-        minSdk = 30          // Wear OS 4+ (Galaxy Watch 7 runs Wear OS 5 / API 34)
-        targetSdk = 34
+        minSdk = 26
+        targetSdk = 35
         versionCode = 2
         versionName = "0.2.0"
     }
@@ -40,24 +40,14 @@ dependencies {
     // Shared data/auth/sync layer (Supabase, Room, WorkManager, DataStore, Data Layer contract)
     implementation(project(":core"))
 
-    // Compose for Wear OS
+    // Compose (phone) — Material 3
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
-    implementation("androidx.wear.compose:compose-material:1.4.0")
-    implementation("androidx.wear.compose:compose-foundation:1.4.0")
-    implementation("androidx.wear.compose:compose-navigation:1.4.0")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
-
-    // Ongoing activity + RemoteInputIntentHelper (Wear OS text input)
-    implementation("androidx.wear:wear-ongoing:1.0.0")
-    implementation("androidx.wear:wear:1.3.0")
-    implementation("androidx.wear:wear-input:1.2.0")
-
-    // Tile (one-tap start/stop glance surface)
-    implementation("androidx.wear.tiles:tiles:1.4.0")
-    implementation("androidx.wear.protolayout:protolayout:1.2.0")
-    implementation("androidx.wear.protolayout:protolayout-material:1.2.0")
-    implementation("com.google.guava:guava:33.3.0-android")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
 }

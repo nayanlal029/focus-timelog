@@ -1,4 +1,4 @@
-package com.focuslog.wear.data.local
+package com.focuslog.core.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -14,7 +14,7 @@ data class CategoryEntity(
 
 /**
  * A logged block waiting to be written to Supabase. Rows are inserted here first (and on insert
- * failure), then flushed by [com.focuslog.wear.data.SyncWorker]. Mirrors the `time_blocks` insert
+ * failure), then flushed by [com.focuslog.core.data.SyncWorker]. Mirrors the `time_blocks` insert
  * shape exactly.
  */
 @Entity(tableName = "pending_blocks")

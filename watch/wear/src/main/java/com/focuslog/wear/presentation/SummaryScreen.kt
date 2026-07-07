@@ -17,7 +17,7 @@ import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.ListHeader
 import androidx.wear.compose.material.Text
-import com.focuslog.wear.data.CategoryType
+import com.focuslog.core.data.CategoryType
 import com.focuslog.wear.util.fmtDuration
 import com.focuslog.wear.viewmodel.SummaryPeriod
 import com.focuslog.wear.viewmodel.SummaryUiState

@@ -1,9 +1,10 @@
-package com.focuslog.wear.data
+package com.focuslog.core.data
 
 import android.content.Context
-import com.focuslog.wear.data.local.CategoryEntity
-import com.focuslog.wear.data.local.PendingBlockEntity
-import com.focuslog.wear.data.local.WatchDatabase
+import android.util.Log
+import com.focuslog.core.data.local.CategoryEntity
+import com.focuslog.core.data.local.PendingBlockEntity
+import com.focuslog.core.data.local.WatchDatabase
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.flow.Flow
@@ -12,8 +13,10 @@ import java.util.UUID
 
 class SupabaseRepository(context: Context) {
 
-    private val db = WatchDatabase.get(context)
+    private val appContext = context.applicationContext
+    private val db = WatchDatabase.get(appContext)
     private val client = SupabaseProvider.client
+    private val settings = WatchSettings(appContext)
 
     // ── Categories ────────────────────────────────────────────────────────────
 
@@ -75,26 +78,42 @@ class SupabaseRepository(context: Context) {
     suspend fun saveBlock(block: TimeBlockInsert) {
         db.pendingBlockDao().insert(block.toPending())
         flushPending()
+        // Anything that didn't upload immediately (offline, token not ready, transient error)
+        // must be retried in the background — otherwise it sits in the queue until the next
+        // manual sync. SyncWorker waits for connectivity and retries with backoff.
+        if (db.pendingBlockDao().count() > 0) SyncWorker.enqueue(appContext)
     }
 
     /** Flush queued blocks to Supabase. Stops at first failure (retry by SyncWorker). */
     suspend fun flushPending(): Result<Int> = runCatching {
+        val pending = db.pendingBlockDao().getAll()
+        Log.i(TAG, "flushPending: ${pending.size} block(s) queued")
         var sent = 0
-        for (p in db.pendingBlockDao().getAll()) {
-            val ok = runCatching {
-                client.from("time_blocks").insert(p.toInsert())
-            }.isSuccess
-            if (ok) {
+        for (p in pending) {
+            try {
+                // upsert (not insert) so a block already in Supabase — recovered manually, or
+                // inserted on a prior run whose local delete didn't land — is a harmless no-op on
+                // its (user_id, id) primary key instead of a duplicate-key error that wedges the queue.
+                client.from("time_blocks").upsert(p.toInsert())
                 db.pendingBlockDao().delete(p.id)
                 sent++
-            } else {
-                break  // leave remaining in queue for SyncWorker to retry
+            } catch (e: Exception) {
+                // Surface *why* it failed (bad config/DNS, auth-RLS 401, enum, …) via
+                // `adb logcat -s FocusLogSync` instead of failing silently. Rethrow so SyncWorker
+                // schedules a retry; the rest stay queued.
+                Log.w(TAG, "Upload failed for block ${p.id} (user=${p.userId}): ${e.message}", e)
+                throw e
             }
         }
+        if (sent > 0) settings.setLastSyncedAt(System.currentTimeMillis())
+        Log.i(TAG, "flushPending: sent $sent, ${db.pendingBlockDao().count()} still queued")
         sent
     }
 
     suspend fun pendingCount(): Int = db.pendingBlockDao().count()
+
+    /** Live count of blocks still waiting to upload — updates as they sync (incl. in background). */
+    fun observePendingCount(): Flow<Int> = db.pendingBlockDao().observeCount()
 
     // ── Summary (read-only, 24 h / 7 d) ──────────────────────────────────────
 
@@ -110,6 +129,44 @@ class SupabaseRepository(context: Context) {
             .decodeList<TimeBlockRow>()
     }
 
+    // ── Block list / edit (phone app) ─────────────────────────────────────────
+
+    /** All blocks overlapping [startMs, endMs), newest first. Paged to dodge the 1000-row cap. */
+    suspend fun fetchBlocksBetween(startMs: Long, endMs: Long): Result<List<TimeBlockFull>> =
+        runCatching {
+            val all = mutableListOf<TimeBlockFull>()
+            var offset = 0L
+            val page = 1000L
+            while (true) {
+                val rows = client.from("time_blocks")
+                    .select {
+                        filter {
+                            lt("start_ms", endMs)
+                            gt("end_ms", startMs)
+                        }
+                        order("start_ms", Order.DESCENDING)
+                        range(offset, offset + page - 1)
+                    }
+                    .decodeList<TimeBlockFull>()
+                all += rows
+                if (rows.size < page) break
+                offset += page
+            }
+            all
+        }
+
+    suspend fun updateBlock(id: String, update: TimeBlockUpdate): Result<Unit> = runCatching {
+        client.from("time_blocks").update(update) {
+            filter { eq("id", id) }
+        }
+    }
+
+    suspend fun deleteBlock(id: String): Result<Unit> = runCatching {
+        client.from("time_blocks").delete {
+            filter { eq("id", id) }
+        }
+    }
+
     // ── Mapping helpers ───────────────────────────────────────────────────────
 
     private fun TimeBlockInsert.toPending() = PendingBlockEntity(
@@ -121,4 +178,8 @@ class SupabaseRepository(context: Context) {
         id = id, userId = userId, categoryId = categoryId, categoryName = categoryName,
         type = type, startMs = startMs, endMs = endMs, isBreak = isBreak,
     )
+
+    private companion object {
+        const val TAG = "FocusLogSync"
+    }
 }

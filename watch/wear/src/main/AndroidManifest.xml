@@ -45,6 +45,20 @@
                 android:value="Keeps the active focus timer running in the background." />
         </service>
 
+        <!-- Receives the phone app's credential handoff (Wearable Data Layer) so the watch is
+             signed in automatically — no manual User ID/password entry on the watch. -->
+        <service
+            android:name=".service.AuthDataListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:path="/focuslog/auth" />
+            </intent-filter>
+        </service>
+
         <!-- One-tap start/stop Tile. -->
         <service
             android:name=".tile.FocusTileService"

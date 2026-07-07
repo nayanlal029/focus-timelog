@@ -1,4 +1,4 @@
-package com.focuslog.wear.data.local
+package com.focuslog.core.data.local
 
 import android.content.Context
 import androidx.room.Database

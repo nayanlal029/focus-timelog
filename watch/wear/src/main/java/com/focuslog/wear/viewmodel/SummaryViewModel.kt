@@ -3,8 +3,8 @@ package com.focuslog.wear.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.focuslog.wear.data.CategoryType
-import com.focuslog.wear.data.SupabaseRepository
+import com.focuslog.core.data.CategoryType
+import com.focuslog.core.data.SupabaseRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

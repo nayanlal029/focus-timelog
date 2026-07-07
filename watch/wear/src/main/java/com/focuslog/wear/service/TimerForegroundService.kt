@@ -13,8 +13,8 @@ import androidx.core.app.NotificationCompat
 import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
 import com.focuslog.wear.R
-import com.focuslog.wear.data.WatchSettings
-import com.focuslog.wear.data.local.WatchDatabase
+import com.focuslog.core.data.WatchSettings
+import com.focuslog.core.data.local.WatchDatabase
 import com.focuslog.wear.presentation.MainActivity
 import com.focuslog.wear.util.fmtHMS
 import com.focuslog.wear.util.vibrateCheckIn

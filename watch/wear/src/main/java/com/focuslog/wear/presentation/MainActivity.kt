@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
         val checkInBuzzIntensity by timerVm.checkInBuzzIntensity.collectAsStateWithLifecycle()
         val recentCategoryIds by timerVm.recentCategoryIds.collectAsStateWithLifecycle()
         val pendingCount by timerVm.pendingCount.collectAsStateWithLifecycle()
+        val lastSyncedAt by timerVm.lastSyncedAt.collectAsStateWithLifecycle()
         val handle by timerVm.handle.collectAsStateWithLifecycle()
         val signedInEmail = timerVm.signedInEmail()
 
@@ -227,6 +228,7 @@ class MainActivity : ComponentActivity() {
                     signedInEmail = signedInEmail,
                     signedInHandle = handle,
                     pendingCount = pendingCount,
+                    lastSyncedAt = lastSyncedAt,
                     onStart = {
                         selected?.let { cat ->
                             timerVm.startActivity(cat)

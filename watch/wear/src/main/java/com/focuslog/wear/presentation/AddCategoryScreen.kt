@@ -20,7 +20,7 @@ import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.ListHeader
 import androidx.wear.compose.material.Text
 import androidx.wear.input.RemoteInputIntentHelper
-import com.focuslog.wear.data.CategoryType
+import com.focuslog.core.data.CategoryType
 
 private const val KEY_NAME = "category_name"
 

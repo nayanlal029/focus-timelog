@@ -12,7 +12,7 @@ import androidx.wear.protolayout.material.layouts.PrimaryLayout
 import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
-import com.focuslog.wear.data.local.WatchDatabase
+import com.focuslog.core.data.local.WatchDatabase
 import com.focuslog.wear.presentation.MainActivity
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture

@@ -1,4 +1,4 @@
-package com.focuslog.wear.data
+package com.focuslog.core.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -34,6 +34,8 @@ class WatchSettings(private val context: Context) {
         // reminders keep firing on schedule even while the app UI (and its ViewModel) is gone.
         val CHECKIN_LAST_AT            = longPreferencesKey("checkin_last_at")
         val CHECKIN_SNOOZED_UNTIL      = longPreferencesKey("checkin_snoozed_until")
+        // Wall-clock time of the last successful block upload, surfaced on the Sync page.
+        val LAST_SYNCED_AT             = longPreferencesKey("last_synced_at")
     }
 
     val pomodoroWorkMin: Flow<Int>    = context.watchDataStore.data.map { it[POMODORO_WORK_MIN]  ?: 25 }
@@ -48,6 +50,7 @@ class WatchSettings(private val context: Context) {
     val checkInBuzzIntensity: Flow<Int> = context.watchDataStore.data.map { it[CHECKIN_BUZZ_INTENSITY] ?: 2 }
     val checkInLastAt: Flow<Long>     = context.watchDataStore.data.map { it[CHECKIN_LAST_AT] ?: 0L }
     val checkInSnoozedUntil: Flow<Long> = context.watchDataStore.data.map { it[CHECKIN_SNOOZED_UNTIL] ?: 0L }
+    val lastSyncedAt: Flow<Long>      = context.watchDataStore.data.map { it[LAST_SYNCED_AT] ?: 0L }
 
     val defaultCategoriesSeeded: Flow<Boolean> =
         context.watchDataStore.data.map { it[DEFAULT_CATEGORIES_SEEDED] ?: false }
@@ -72,6 +75,7 @@ class WatchSettings(private val context: Context) {
     suspend fun setCheckInBuzzIntensity(v: Int) = context.watchDataStore.edit { it[CHECKIN_BUZZ_INTENSITY] = v.coerceIn(0, 2) }
     suspend fun setCheckInLastAt(v: Long)     = context.watchDataStore.edit { it[CHECKIN_LAST_AT] = v }
     suspend fun setCheckInSnoozedUntil(v: Long) = context.watchDataStore.edit { it[CHECKIN_SNOOZED_UNTIL] = v }
+    suspend fun setLastSyncedAt(v: Long)      = context.watchDataStore.edit { it[LAST_SYNCED_AT] = v }
 
     suspend fun markDefaultCategoriesSeeded() =
         context.watchDataStore.edit { it[DEFAULT_CATEGORIES_SEEDED] = true }

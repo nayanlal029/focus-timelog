@@ -1,4 +1,4 @@
-package com.focuslog.wear.data.local
+package com.focuslog.core.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -34,6 +34,9 @@ interface PendingBlockDao {
 
     @Query("SELECT COUNT(*) FROM pending_blocks")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM pending_blocks")
+    fun observeCount(): Flow<Int>
 }
 
 @Dao

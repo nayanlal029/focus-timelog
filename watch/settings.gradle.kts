@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "focus-timelog-watch"
+include(":core")
 include(":wear")
+include(":mobile")

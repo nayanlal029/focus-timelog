@@ -1,7 +1,7 @@
 package com.focuslog.wear.presentation
 
 import androidx.compose.ui.graphics.Color
-import com.focuslog.wear.data.CategoryType
+import com.focuslog.core.data.CategoryType
 
 /** Color coding mirrors the web app: focus = blue, distraction = red, neutral = gray. */
 object FocusColors {

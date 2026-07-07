@@ -1,4 +1,4 @@
-package com.focuslog.wear.auth
+package com.focuslog.core.auth
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences

@@ -1,6 +1,6 @@
-package com.focuslog.wear.data
+package com.focuslog.core.data
 
-import com.focuslog.wear.BuildConfig
+import com.focuslog.core.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
