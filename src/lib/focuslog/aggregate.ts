@@ -1,4 +1,4 @@
-import type { TimeBlock, CategoryType } from "./types";
+import type { TimeBlock } from "./types";
 
 /** Returns overlap (in ms) between [bStart,bEnd) and [rStart,rEnd). 0 if none. */
 export function overlapMs(bStart: number, bEnd: number, rStart: number, rEnd: number): number {
@@ -22,9 +22,56 @@ export function clipBlocks(blocks: TimeBlock[], start: number, end: number): Cli
   return out;
 }
 
-export function sumByType(items: ClippedBlock[]): Record<CategoryType, number> {
-  const out: Record<CategoryType, number> = { focus: 0, distraction: 0, neutral: 0 };
-  for (const { block, clippedMs } of items) out[block.type] += clippedMs;
+export interface TypeTotals {
+  focus: number;
+  distraction: number;
+  neutral: number;
+  break: number;
+}
+
+/** Sums clipped ms per category type; break blocks go into their own bucket. */
+export function sumByType(items: ClippedBlock[]): TypeTotals {
+  const out: TypeTotals = { focus: 0, distraction: 0, neutral: 0, break: 0 };
+  for (const { block, clippedMs } of items) {
+    if (block.isBreak) out.break += clippedMs;
+    else out[block.type] += clippedMs;
+  }
+  return out;
+}
+
+/** Session count and average clipped duration, excluding break blocks. */
+export function sessionStats(items: ClippedBlock[]): { count: number; avgMs: number } {
+  const sessions = items.filter((i) => !i.block.isBreak);
+  const totalMs = sessions.reduce((s, i) => s + i.clippedMs, 0);
+  return {
+    count: sessions.length,
+    avgMs: sessions.length ? Math.round(totalMs / sessions.length) : 0,
+  };
+}
+
+/**
+ * Iterates calendar days (local time, DST-safe) covering [startMs, endMs].
+ * `dayEnd` is the exclusive next-midnight boundary — pair it with overlapMs,
+ * which treats range ends as exclusive.
+ */
+export function eachLocalDay(
+  startMs: number,
+  endMs: number,
+): { dayStart: number; dayEnd: number; date: Date }[] {
+  const out: { dayStart: number; dayEnd: number; date: Date }[] = [];
+  if (endMs < startMs) return out;
+  const s = new Date(startMs);
+  s.setHours(0, 0, 0, 0);
+  const y = s.getFullYear();
+  const m = s.getMonth();
+  const d = s.getDate();
+  for (let i = 0; ; i++) {
+    const date = new Date(y, m, d + i);
+    const dayStart = date.getTime();
+    if (dayStart > endMs) break;
+    const dayEnd = new Date(y, m, d + i + 1).getTime();
+    out.push({ dayStart, dayEnd, date });
+  }
   return out;
 }
 

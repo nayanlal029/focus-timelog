@@ -69,6 +69,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
+    scripts: [
+      {
+        // Apply the persisted theme before first paint so light mode doesn't flash dark.
+        children:
+          'try{var t=JSON.parse(localStorage.getItem("focuslog.theme.v1"));if(t==="light"){var c=document.documentElement.classList;c.remove("dark");c.add("light");}}catch(e){}',
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

@@ -110,7 +110,7 @@ export function TodayScreen() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 px-4 pt-6">
+      <div className="flex flex-col gap-6 px-4 pt-6 md:pt-10">
         <header className="flex items-end justify-between">
           <div>
             <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Today</div>
@@ -127,6 +127,9 @@ export function TodayScreen() {
           </button>
         </header>
 
+        {/* Desktop: timer + picker + pomodoro on the left, today's timeline on the right */}
+        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-10">
+        <div className="flex flex-col gap-6">
         <section className="flex flex-col items-center pt-2">
           <div className="mb-3 h-6 text-sm font-medium">
             {selectedCat ? (
@@ -242,6 +245,7 @@ export function TodayScreen() {
             </div>
           )}
         </section>
+        </div>
 
         <section className="space-y-3 pb-4">
           <div className="flex items-center justify-between">
@@ -250,6 +254,7 @@ export function TodayScreen() {
           </div>
           <Timeline blocks={todayBlocks} emptyLabel="Pick a category and tap Play to start logging." />
         </section>
+        </div>
 
         <SaveActivitySheet
           open={saveOpen}

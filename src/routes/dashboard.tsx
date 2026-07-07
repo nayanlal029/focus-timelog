@@ -4,7 +4,7 @@ import { Filter, X } from "lucide-react";
 import { useFocusLog } from "@/lib/focuslog/context";
 import { useFilter } from "@/lib/focuslog/filter-context";
 import { fmtDuration } from "@/lib/focuslog/format";
-import { clipBlocks, sumByType, topByCategory, overlapMs } from "@/lib/focuslog/aggregate";
+import { clipBlocks, sumByType, sessionStats, topByCategory, overlapMs, eachLocalDay } from "@/lib/focuslog/aggregate";
 import { FilterPanel } from "@/components/focuslog/FilterPanel";
 import { cn } from "@/lib/utils";
 
@@ -25,50 +25,63 @@ function DashboardScreen() {
 
   const totals = useMemo(() => sumByType(clipped), [clipped]);
 
-  // Per-day buckets: clip each block to each day's window so cross-midnight blocks split.
-  const days = useMemo(() => {
-    if (!range) return [];
-    const out: { label: string; key: string; focus: number; distraction: number; neutral: number }[] = [];
-    const start = new Date(range.start); start.setHours(0, 0, 0, 0);
-    const end = new Date(range.end); end.setHours(0, 0, 0, 0);
-    const oneDay = 86400000;
-    const dayCount = Math.min(60, Math.floor((end.getTime() - start.getTime()) / oneDay) + 1);
-    for (let i = 0; i < dayCount; i++) {
-      const d = new Date(start.getTime() + i * oneDay);
-      const dayStart = d.getTime();
-      const dayEnd = dayStart + oneDay - 1;
+  // Per-day buckets (calendar days, DST-safe); grouped per week for long ranges.
+  const { buckets, perWeek } = useMemo(() => {
+    type Bucket = { label: string; key: string; focus: number; distraction: number; date: Date };
+    if (!range) return { buckets: [] as Bucket[], perWeek: false };
+    const dayBuckets: Bucket[] = eachLocalDay(range.start, range.end).map(({ dayStart, dayEnd, date }) => {
       const wStart = Math.max(dayStart, range.start);
       const wEnd = Math.min(dayEnd, range.end);
-      const t = { focus: 0, distraction: 0, neutral: 0 };
+      let focus = 0;
+      let distraction = 0;
       for (const b of blocks) {
         const ms = overlapMs(b.start, b.end, wStart, wEnd);
-        if (ms > 0) t[b.type] += ms;
+        if (ms <= 0) continue;
+        if (b.isBreak) continue;
+        if (b.type === "focus") focus += ms;
+        else if (b.type === "distraction") distraction += ms;
       }
-      out.push({
-        label: dayCount <= 14
-          ? d.toLocaleDateString([], { weekday: "narrow" })
-          : String(d.getDate()),
-        key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
-        focus: t.focus,
-        distraction: t.distraction,
-        neutral: t.neutral,
-      });
+      return {
+        label: "",
+        key: `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`,
+        focus,
+        distraction,
+        date,
+      };
+    });
+    if (dayBuckets.length > 90) {
+      const weeks: Bucket[] = [];
+      for (let i = 0; i < dayBuckets.length; i += 7) {
+        const chunk = dayBuckets.slice(i, i + 7);
+        weeks.push({
+          label: chunk[0].date.toLocaleDateString([], { day: "numeric", month: "short" }),
+          key: chunk[0].key,
+          focus: chunk.reduce((s, c) => s + c.focus, 0),
+          distraction: chunk.reduce((s, c) => s + c.distraction, 0),
+          date: chunk[0].date,
+        });
+      }
+      return { buckets: weeks, perWeek: true };
     }
-    return out;
+    for (const b of dayBuckets) {
+      b.label = dayBuckets.length <= 14
+        ? b.date.toLocaleDateString([], { weekday: "narrow" })
+        : String(b.date.getDate());
+    }
+    return { buckets: dayBuckets, perWeek: false };
   }, [range, blocks]);
 
-  const maxBar = Math.max(1, ...days.map((d) => Math.max(d.focus, d.distraction)));
+  const maxBar = Math.max(1, ...buckets.map((d) => Math.max(d.focus, d.distraction)));
 
   const topFocus = topByCategory(clipped.filter((c) => c.block.type === "focus")).slice(0, 5);
   const topDistr = topByCategory(clipped.filter((c) => c.block.type === "distraction")).slice(0, 5);
 
-  const sessionCount = clipped.length;
+  const { count: sessionCount, avgMs: avgSessionMs } = useMemo(() => sessionStats(clipped), [clipped]);
   const totalMs = totals.focus + totals.distraction + totals.neutral;
   const focusPct = totalMs > 0 ? Math.round((totals.focus / totalMs) * 100) : 0;
-  const avgSessionMs = sessionCount > 0 ? Math.round(totalMs / sessionCount) : 0;
 
   return (
-    <div className="flex flex-col gap-6 px-4 pt-6">
+    <div className="flex flex-col gap-6 px-4 pt-6 md:pt-10">
       <header>
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Dashboard</div>
@@ -96,41 +109,46 @@ function DashboardScreen() {
         <StatCard label="Neutral" value={totals.neutral} tone="neutral" />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <MiniStat label="Sessions" value={String(sessionCount)} />
         <MiniStat label="Focus %" value={`${focusPct}%`} />
         <MiniStat label="Avg session" value={fmtDuration(avgSessionMs)} />
+        <MiniStat label="Break" value={fmtDuration(totals.break)} />
       </div>
 
-      <section className="rounded-2xl border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Range breakdown</h2>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-focus" /> Focus</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-distraction" /> Distraction</span>
+      {/* Desktop: chart takes 2/3 width with the top-lists in a side column */}
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-3 lg:items-start">
+        <section className="rounded-2xl border border-border bg-card p-4 lg:col-span-2 lg:p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Range breakdown</h2>
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-focus" /> Focus</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-distraction" /> Distraction</span>
+              {perWeek && <span>per week</span>}
+            </div>
           </div>
-        </div>
-        {days.length === 0 ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">Pick a date range to see a breakdown.</div>
-        ) : (
-          <div className="flex h-40 items-end justify-between gap-1">
-            {days.map((d) => (
-              <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
-                <div className="flex h-32 w-full items-end gap-0.5">
-                  <div className="flex-1 rounded-t-md bg-focus/80" style={{ height: `${(d.focus / maxBar) * 100}%` }} />
-                  <div className="flex-1 rounded-t-md bg-distraction/80" style={{ height: `${(d.distraction / maxBar) * 100}%` }} />
+          {buckets.length === 0 ? (
+            <div className="py-8 text-center text-xs text-muted-foreground">Pick a date range to see a breakdown.</div>
+          ) : (
+            <div className="flex h-40 items-end justify-between gap-1 lg:h-64">
+              {buckets.map((d) => (
+                <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
+                  <div className="flex h-32 w-full items-end gap-0.5 lg:h-56">
+                    <div className="flex-1 rounded-t-md bg-focus/80" style={{ height: `${(d.focus / maxBar) * 100}%` }} />
+                    <div className="flex-1 rounded-t-md bg-distraction/80" style={{ height: `${(d.distraction / maxBar) * 100}%` }} />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">{d.label}</div>
                 </div>
-                <div className="text-[10px] text-muted-foreground">{d.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </section>
 
-      <section className="grid gap-3">
-        <TopList title="Top Focus" items={topFocus} tone="focus" />
-        <TopList title="Top Distraction" items={topDistr} tone="distraction" />
-      </section>
+        <section className="grid gap-3">
+          <TopList title="Top Focus" items={topFocus} tone="focus" />
+          <TopList title="Top Distraction" items={topDistr} tone="distraction" />
+        </section>
+      </div>
     </div>
   );
 }
