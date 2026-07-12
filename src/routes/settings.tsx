@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, BellRing, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Calendar, Check, Download, LogIn, LogOut, Moon, Pencil, Sun, Timer as TimerIcon, Trash2, Upload, FileText, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChromeImportSheet } from "@/components/focuslog/ChromeImportSheet";
 import { useFocusLog } from "@/lib/focuslog/context";
@@ -22,7 +22,8 @@ import type { Category } from "@/lib/focuslog/types";
 import {
   loadPomodoro, savePomodoro, loadPauseAlerts, savePauseAlerts, type PomodoroConfig,
 } from "@/lib/focuslog/alerts";
-import { fetchHandle, saveHandle, isValidHandle, isHandleTaken } from "@/lib/focuslog/handle";
+import { getMyProfile, saveMyHandle, autoClaimHandle, isValidHandle } from "@/lib/focuslog/handle";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "FocusLog — Settings" }] }),
@@ -30,60 +31,18 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsScreen() {
-  const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData } = useFocusLog();
+  const { categories, deleteCategory, reorderCategories, theme, setTheme, blocks, clearAllData, deleteBlocks } = useFocusLog();
   const { user, guest, exitGuest, signOut } = useAuth();
   const [editing, setEditing] = useState<Category | null>(null);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [rangeDeleteOpen, setRangeDeleteOpen] = useState(false);
   const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
   const [pauseAlerts, setPauseAlerts] = useState<boolean>(() => loadPauseAlerts());
-  const [handle, setHandle] = useState<string | null>(null);
-  const [editHandle, setEditHandle] = useState(false);
-  const [handleInput, setHandleInput] = useState("");
-  const [handleError, setHandleError] = useState<string | null>(null);
-  const [handleSaving, setHandleSaving] = useState(false);
-  const handleInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => { savePomodoro(pomo); }, [pomo]);
   useEffect(() => { savePauseAlerts(pauseAlerts); }, [pauseAlerts]);
-
-  useEffect(() => {
-    if (user?.id) fetchHandle(user.id).then(setHandle);
-  }, [user?.id]);
-
-  const startEditHandle = () => {
-    setHandleInput(handle ?? "");
-    setHandleError(null);
-    setEditHandle(true);
-    setTimeout(() => handleInputRef.current?.focus(), 50);
-  };
-
-  const commitHandle = async () => {
-    if (!user) return;
-    const h = handleInput.trim().toLowerCase();
-    if (!isValidHandle(h)) {
-      setHandleError("3–10 lowercase letters and numbers only");
-      return;
-    }
-    setHandleSaving(true);
-    setHandleError(null);
-    const taken = await isHandleTaken(h, user.id);
-    if (taken) {
-      setHandleError("That User ID is already taken");
-      setHandleSaving(false);
-      return;
-    }
-    const { error } = await saveHandle(user.id, h, user.email ?? "");
-    if (error) {
-      setHandleError("Failed to save — try again");
-    } else {
-      setHandle(h);
-      setEditHandle(false);
-    }
-    setHandleSaving(false);
-  };
 
   const move = (idx: number, dir: -1 | 1) => {
     const ids = categories.map((c) => c.id);
@@ -159,6 +118,12 @@ function SettingsScreen() {
           <Button variant="outline" className="justify-start" onClick={() => setExportOpen(true)}>
             <Download className="h-4 w-4" /> Export to Excel
           </Button>
+          <Button asChild variant="outline" className="justify-start">
+            <Link to="/calendar"><Calendar className="h-4 w-4" /> Calendar view (desktop)</Link>
+          </Button>
+          <Button variant="outline" className="justify-start text-distraction hover:text-distraction" onClick={() => setRangeDeleteOpen(true)}>
+            <Trash2 className="h-4 w-4" /> Delete entries in date range
+          </Button>
           <Button variant="outline" className="justify-start text-distraction hover:text-distraction" onClick={() => setConfirmClear(true)}>
             <Trash2 className="h-4 w-4" /> Delete all data
           </Button>
@@ -214,34 +179,8 @@ function SettingsScreen() {
           </>
         ) : (
           <>
-            <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
-            {editHandle ? (
-              <div className="mt-2 flex items-center gap-2">
-                <Input
-                  ref={handleInputRef}
-                  value={handleInput}
-                  onChange={(e) => setHandleInput(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
-                  placeholder="user id"
-                  maxLength={10}
-                  className="font-mono h-8 text-sm"
-                  onKeyDown={(e) => { if (e.key === "Enter") commitHandle(); if (e.key === "Escape") setEditHandle(false); }}
-                />
-                <button onClick={commitHandle} disabled={handleSaving} className="rounded-md p-1.5 text-focus" aria-label="Save">
-                  <Check className="h-4 w-4" />
-                </button>
-                <button onClick={() => setEditHandle(false)} className="rounded-md p-1.5 text-muted-foreground" aria-label="Cancel">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="mt-1 flex items-center gap-2">
-                <span className="font-mono text-base font-semibold">@{handle ?? "—"}</span>
-                <button onClick={startEditHandle} className="rounded-md p-1 text-muted-foreground hover:text-foreground" aria-label="Edit User ID">
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-            {handleError && <p className="mt-1 text-[11px] text-destructive">{handleError}</p>}
+            <p className="mb-2 text-[11px] text-muted-foreground truncate">{user?.email ?? "Signed in"}</p>
+            {user && <HandleRow userId={user.id} email={user.email ?? ""} />}
             <Button variant="outline" className="mt-3 w-full justify-start" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" /> Sign out
             </Button>
@@ -255,6 +194,7 @@ function SettingsScreen() {
           <span className="text-xs text-muted-foreground">What's new →</span>
         </Link>
       </section>
+
       </div>
 
       <CategoryDialog open={newCatOpen} onOpenChange={setNewCatOpen} />
@@ -265,6 +205,7 @@ function SettingsScreen() {
       />
       <ExportSheet open={exportOpen} onOpenChange={setExportOpen} />
       <ChromeImportSheet open={importOpen} onOpenChange={setImportOpen} />
+      <RangeDeleteSheet open={rangeDeleteOpen} onOpenChange={setRangeDeleteOpen} blocks={blocks} deleteBlocks={deleteBlocks} />
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent className="max-w-[92vw] rounded-2xl">
@@ -358,5 +299,160 @@ function ExportSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function RangeDeleteSheet({ open, onOpenChange, blocks, deleteBlocks }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  blocks: import("@/lib/focuslog/types").TimeBlock[];
+  deleteBlocks: (ids: string[]) => void;
+}) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [onlyImported, setOnlyImported] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const matching = (() => {
+    if (!from || !to) return [] as string[];
+    const s = new Date(from + "T00:00:00").getTime();
+    const e = new Date(to + "T23:59:59.999").getTime();
+    if (!isFinite(s) || !isFinite(e) || e < s) return [];
+    return blocks
+      .filter((b) => b.start >= s && b.start <= e)
+      .filter((b) => (onlyImported ? !!b.link : true))
+      .map((b) => b.id);
+  })();
+
+  const submit = () => {
+    if (!matching.length) return;
+    deleteBlocks(matching);
+    toast.success(`Deleted ${matching.length} entries.`);
+    setConfirming(false);
+    onOpenChange(false);
+    setFrom(""); setTo("");
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-3xl border-t border-border">
+        <SheetHeader className="text-left">
+          <SheetTitle>Delete entries in date range</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 pt-3 pb-6">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="rd-from">From</Label>
+              <Input id="rd-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rd-to">To</Label>
+              <Input id="rd-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-3">
+            <Label htmlFor="rd-imp" className="text-sm">Only browser/CSV imports</Label>
+            <Switch id="rd-imp" checked={onlyImported} onCheckedChange={setOnlyImported} />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {from && to ? `${matching.length} entries will be deleted.` : "Pick a date range."}
+          </p>
+          <Button
+            className="w-full bg-distraction text-distraction-foreground hover:bg-distraction/90"
+            disabled={!matching.length}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 className="h-4 w-4" /> Delete {matching.length || ""} entries
+          </Button>
+        </div>
+        <AlertDialog open={confirming} onOpenChange={setConfirming}>
+          <AlertDialogContent className="max-w-[92vw] rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {matching.length} entries?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Entries from {from} to {to}{onlyImported ? " (imports only)" : ""} will be permanently removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={submit} className="bg-distraction text-distraction-foreground hover:bg-distraction/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function HandleRow({ userId, email }: { userId: string; email: string }) {
+  const [handle, setHandle] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const p = await getMyProfile(userId);
+      if (cancelled) return;
+      if (p?.handle) {
+        setHandle(p.handle);
+      } else if (email) {
+        const claimed = await autoClaimHandle(userId, email);
+        if (!cancelled && claimed) setHandle(claimed);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, email]);
+
+  const startEdit = () => { setDraft(handle ?? ""); setEditing(true); };
+  const cancel = () => { setEditing(false); setDraft(""); };
+  const save = async () => {
+    const next = draft.trim().toLowerCase();
+    if (!isValidHandle(next)) { toast.error("3–20 chars: a–z, 0–9, _"); return; }
+    if (next === handle) { setEditing(false); return; }
+    setBusy(true);
+    try {
+      await saveMyHandle(userId, email, next);
+      setHandle(next);
+      setEditing(false);
+      toast.success(`User ID updated to @${next}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-sm text-muted-foreground">@</span>
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-8 font-mono text-sm"
+          maxLength={20}
+        />
+        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={save} disabled={busy} aria-label="Save">
+          <Check className="h-4 w-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancel} disabled={busy} aria-label="Cancel">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-sm">{handle ? `@${handle}` : <span className="text-muted-foreground">no handle</span>}</span>
+      <button onClick={startEdit} className="rounded-md p-1 text-muted-foreground hover:text-foreground" aria-label="Edit User ID">
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }

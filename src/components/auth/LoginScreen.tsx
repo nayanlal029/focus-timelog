@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
-import { suggestHandle, saveHandle, emailForHandle } from "@/lib/focuslog/handle";
+import { autoClaimHandle, emailForHandle, looksLikeEmail } from "@/lib/focuslog/handle";
 
 export function LoginScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [identifier, setIdentifier] = useState(""); // email or handle
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const { enterGuest } = useAuth();
@@ -22,40 +22,51 @@ export function LoginScreen() {
     setBusy(true);
     try {
       if (mode === "login") {
-        // Resolve handle → email if no @ present
         let email = identifier.trim();
-        if (!email.includes("@")) {
+        if (!looksLikeEmail(email)) {
           const resolved = await emailForHandle(email);
-          if (!resolved) {
-            toast.error("User ID not found. Try signing in with your email instead.");
-            return;
-          }
+          if (!resolved) throw new Error("No account found for that User ID.");
           email = resolved;
         }
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        // Signup always requires a real email
         const email = identifier.trim();
-        if (!email.includes("@")) {
-          toast.error("Please enter your email address to create an account.");
-          return;
-        }
+        if (!looksLikeEmail(email)) throw new Error("Please enter an email address to sign up.");
         const { data, error } = await supabase.auth.signUp({
           email, password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        // Auto-assign a handle for new users
         if (data.user) {
-          const handle = suggestHandle(email);
-          await saveHandle(data.user.id, handle, email);
+          const h = await autoClaimHandle(data.user.id, email);
+          if (h) toast.success(`Account created. Your User ID is @${h}.`);
+          else toast.success("Account created.");
         }
-        toast.success("Account created. You're signed in.");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const forgot = async () => {
+    const email = identifier.trim();
+    if (!email || !looksLikeEmail(email)) {
+      toast.error("Enter your email above, then tap Forgot password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Password reset link sent. Check your inbox.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send reset email.");
     } finally {
       setBusy(false);
     }
@@ -72,6 +83,7 @@ export function LoginScreen() {
         toast.error(m);
         setBusy(false);
       }
+      // If redirected, browser navigates away; if tokens received, auth listener picks it up.
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Google sign-in failed");
       setBusy(false);
@@ -84,7 +96,7 @@ export function LoginScreen() {
         <div className="mb-6 text-center">
           <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">FocusLog</div>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">{mode === "login" ? "Welcome back" : "Create account"}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Your data syncs across phone, tablet, desktop, and watch.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Your data syncs across phone, tablet, and desktop.</p>
         </div>
 
         <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-card p-4">
@@ -93,29 +105,31 @@ export function LoginScreen() {
             <Input
               id="identifier"
               type="text"
-              autoComplete="email"
-              placeholder={mode === "login" ? "e.g. nlal029 or you@email.com" : "you@email.com"}
+              autoComplete={mode === "login" ? "username" : "email"}
               required
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
+              placeholder={mode === "login" ? "you@example.com or @handle" : "you@example.com"}
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <Input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {mode === "login" ? "Sign in" : "Sign up"}
           </Button>
+          {mode === "login" && (
+            <button
+              type="button"
+              onClick={forgot}
+              disabled={busy}
+              className="block w-full text-right text-xs text-muted-foreground hover:text-foreground"
+            >
+              Forgot password?
+            </button>
+          )}
         </form>
 
         <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">

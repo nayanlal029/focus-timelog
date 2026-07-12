@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://oajcauenacyxwmosfcva.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "focuslognl-mcp",
+      "version": "0.1.0",
+      "title": "FocusLogNL"
+    },
+    "tools": [
+      {
+        "name": "list_categories",
+        "title": "List categories",
+        "description": "List the signed-in user's focus, distraction, and neutral categories.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_time_blocks",
+        "title": "List time blocks",
+        "description": "List the signed-in user's logged time blocks, newest first. Optionally filter by an inclusive ISO date range (YYYY-MM-DD) and limit the count (default 100, max 500).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "from": {
+              "description": "Inclusive start date, YYYY-MM-DD.",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "to": {
+              "description": "Inclusive end date, YYYY-MM-DD.",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "limit": {
+              "description": "Max rows to return (default 100).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "day_summary",
+        "title": "Day summary",
+        "description": "Summarize total minutes spent on focus, distraction, neutral, and break categories for a given day (defaults to today, user local calendar in UTC).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "date": {
+              "description": "Day to summarize, YYYY-MM-DD. Defaults to today.",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "log_time_block",
+        "title": "Log a past time block",
+        "description": "Insert a completed time block for the signed-in user. Provide the category id (from list_categories) and start/end as ISO 8601 timestamps.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "categoryId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Category id from list_categories."
+            },
+            "startIso": {
+              "type": "string",
+              "description": "Start timestamp, ISO 8601."
+            },
+            "endIso": {
+              "type": "string",
+              "description": "End timestamp, ISO 8601. Must be after startIso."
+            },
+            "note": {
+              "description": "Optional note.",
+              "type": "string"
+            },
+            "link": {
+              "description": "Optional URL associated with the block.",
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "categoryId",
+            "startIso",
+            "endIso"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "delete_time_block",
+        "title": "Delete a time block",
+        "description": "Delete a single time block by its id. This is irreversible.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Time block id to delete."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

@@ -92,12 +92,43 @@ export type Database = {
         }
         Relationships: []
       }
+      user_profiles: {
+        Row: {
+          created_at: string
+          email: string
+          handle: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          handle: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          handle?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_email_for_handle: { Args: { _handle: string }; Returns: string }
+      is_handle_available: {
+        Args: { _exclude_user?: string; _handle: string }
+        Returns: boolean
+      }
     }
     Enums: {
       category_type: "focus" | "distraction" | "neutral"

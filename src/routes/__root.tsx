@@ -68,7 +68,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+    ],
     scripts: [
       {
         // Apply the persisted theme before first paint so light mode doesn't flash dark.
@@ -118,12 +121,16 @@ function RootComponent() {
 
 import { useAuth } from "@/lib/auth-context";
 import { LoginScreen } from "@/components/auth/LoginScreen";
+import { useRouterState } from "@tanstack/react-router";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, ready, guest } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (!ready) {
     return <div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
   }
+  // Public auth-recovery route: always reachable.
+  if (pathname === "/reset-password") return <>{children}</>;
   if (!user && !guest) return <LoginScreen />;
   return <>{children}</>;
 }

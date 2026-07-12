@@ -35,7 +35,7 @@ interface FocusLogContextValue {
   cancelActivity: () => void;
   // blocks
   addPastBlock: (input: { categoryId: string; start: number; end: number; note?: string; link?: string }) => void;
-  addManyPastBlocks: (inputs: { categoryId: string; start: number; end: number; note?: string; link?: string }[]) => number;
+  addManyPastBlocks: (inputs: { categoryId: string; start: number; end: number; note?: string; link?: string }[]) => string[];
   updateBlock: (id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note" | "link">>) => void;
   deleteBlock: (id: string) => void;
   deleteBlocks: (ids: string[]) => void;
@@ -476,7 +476,7 @@ export function FocusLogProvider({ children }: { children: ReactNode }) {
       setBlocks((bs) => [...bs, ...created]);
       dbInsertBlocks(created);
     }
-    return created.length;
+    return created.map((b) => b.id);
   }, [categories, blocks]);
 
   const updateBlock = useCallback((id: string, patch: Partial<Pick<TimeBlock, "categoryId" | "start" | "end" | "note" | "link">>) => {

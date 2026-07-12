@@ -10,10 +10,18 @@ export interface PomodoroConfig {
   breakMin: number;
 }
 
+export interface ReminderConfig {
+  enabled: boolean;
+  focusEveryMin: number; // buzz every N min while focusing
+  breakEveryMin: number; // buzz every N min while paused/distracted
+}
+
 export const POMODORO_KEY = "focuslog.pomodoro";
 export const PAUSE_ALERTS_KEY = "focuslog.alerts.pause";
+export const REMINDER_KEY = "focuslog.alerts.reminder";
 
 export const DEFAULT_POMODORO: PomodoroConfig = { enabled: false, workMin: 25, breakMin: 5 };
+export const DEFAULT_REMINDER: ReminderConfig = { enabled: true, focusEveryMin: 10, breakEveryMin: 5 };
 
 export function loadPomodoro(): PomodoroConfig {
   if (typeof window === "undefined") return DEFAULT_POMODORO;
@@ -32,6 +40,23 @@ export function savePomodoro(c: PomodoroConfig) {
   try { localStorage.setItem(POMODORO_KEY, JSON.stringify(c)); } catch { /* ignore */ }
 }
 
+export function loadReminder(): ReminderConfig {
+  if (typeof window === "undefined") return DEFAULT_REMINDER;
+  try {
+    const raw = localStorage.getItem(REMINDER_KEY);
+    if (!raw) return DEFAULT_REMINDER;
+    const p = JSON.parse(raw) as Partial<ReminderConfig>;
+    return {
+      enabled: p.enabled !== false,
+      focusEveryMin: Math.min(120, Math.max(1, Number(p.focusEveryMin) || 10)),
+      breakEveryMin: Math.min(120, Math.max(1, Number(p.breakEveryMin) || 5)),
+    };
+  } catch { return DEFAULT_REMINDER; }
+}
+export function saveReminder(c: ReminderConfig) {
+  try { localStorage.setItem(REMINDER_KEY, JSON.stringify(c)); } catch { /* ignore */ }
+}
+
 export function loadPauseAlerts(): boolean {
   if (typeof window === "undefined") return true;
   try {
@@ -43,17 +68,8 @@ export function savePauseAlerts(on: boolean) {
   try { localStorage.setItem(PAUSE_ALERTS_KEY, on ? "1" : "0"); } catch { /* ignore */ }
 }
 
-// Escalating distraction-pause milestones (minutes).
-const PAUSE_MILESTONES_MIN = [5, 10, 15, 30, 60, 90];
-function nextPauseMilestoneMin(elapsedMin: number): number {
-  for (const m of PAUSE_MILESTONES_MIN) if (m > elapsedMin) return m;
-  // After 90, every 30 min.
-  const k = Math.floor((elapsedMin - 90) / 30) + 1;
-  return 90 + k * 30;
-}
-
 /**
- * Schedules pomodoro work/break alerts and escalating pause alerts.
+ * Schedules pomodoro work/break alerts, plus recurring focus/break reminders.
  * Reads localStorage live so settings changes take effect on next schedule.
  */
 export function useTimerAlerts(active: ActiveState | null) {
@@ -89,25 +105,52 @@ export function useTimerAlerts(active: ActiveState | null) {
     return () => window.clearTimeout(t);
   }, [active?.breakStartedAt, active]);
 
-  // Escalating pause alerts at 5/10/15/30/60/90 min then every 30 min.
+  // Recurring focus reminder — every N minutes while running.
+  useEffect(() => {
+    if (!active || !active.runningSince) return;
+    let timer: number | null = null;
+    const tick = () => {
+      const cfg = loadReminder();
+      if (!cfg.enabled) return;
+      const everyMs = cfg.focusEveryMin * 60_000;
+      const elapsed = Date.now() - active.runningSince!;
+      const next = Math.ceil((elapsed + 1) / everyMs) * everyMs;
+      const delay = next - elapsed;
+      timer = window.setTimeout(() => {
+        if (!loadReminder().enabled) return;
+        haptic(25);
+        beep({ freq: 700, count: 1 });
+        const mins = Math.round(next / 60_000);
+        toast("Still on track?", { description: `Focused ${mins} min` });
+        tick();
+      }, delay);
+    };
+    tick();
+    return () => { if (timer) window.clearTimeout(timer); };
+  }, [active?.runningSince, active]);
+
+  // Recurring break/distraction reminder — every N minutes while paused.
   useEffect(() => {
     if (!active || !active.breakStartedAt) return;
     let timer: number | null = null;
-    const schedule = () => {
+    const tick = () => {
       if (!loadPauseAlerts()) return;
-      const startedAt = active.breakStartedAt!;
-      const elapsedMin = (Date.now() - startedAt) / 60_000;
-      const nextMin = nextPauseMilestoneMin(elapsedMin);
-      const delay = nextMin * 60_000 - (Date.now() - startedAt);
-      if (delay <= 0) return;
+      const cfg = loadReminder();
+      if (!cfg.enabled) return;
+      const everyMs = cfg.breakEveryMin * 60_000;
+      const elapsed = Date.now() - active.breakStartedAt!;
+      const next = Math.ceil((elapsed + 1) / everyMs) * everyMs;
+      const delay = next - elapsed;
       timer = window.setTimeout(() => {
-        haptic(30);
-        beep({ freq: 520, count: 1 });
-        toast(`Paused for ${nextMin} min`, { description: "Tap Resume to get back" });
-        schedule();
+        if (!loadPauseAlerts() || !loadReminder().enabled) return;
+        haptic(35);
+        beep({ freq: 520, count: 2 });
+        const mins = Math.round(next / 60_000);
+        toast(`Paused for ${mins} min`, { description: "Tap Resume to get back" });
+        tick();
       }, delay);
     };
-    schedule();
+    tick();
     return () => { if (timer) window.clearTimeout(timer); };
   }, [active?.breakStartedAt, active]);
 }

@@ -9,13 +9,14 @@ import { Timeline } from "@/components/focuslog/Timeline";
 import { FocusMode } from "@/components/focuslog/FocusMode";
 import { Switch } from "@/components/ui/switch";
 import {
-  loadPomodoro, savePomodoro, useTimerAlerts, type PomodoroConfig,
+  loadPomodoro, savePomodoro, loadReminder, saveReminder, useTimerAlerts,
+  type PomodoroConfig, type ReminderConfig,
 } from "@/lib/focuslog/alerts";
 import { cn } from "@/lib/utils";
 
 export function TodayScreen() {
   const {
-    categories, active, blocks, computeActiveMs, getCategory,
+    categories, active, blocks, computeActiveMs, computeBreakMs, getCategory,
     startActivity, pauseActivity, resumeActivity, stopActivity, cancelActivity,
   } = useFocusLog();
 
@@ -31,6 +32,10 @@ export function TodayScreen() {
   // Pomodoro config (mirrored to localStorage).
   const [pomo, setPomo] = useState<PomodoroConfig>(() => loadPomodoro());
   useEffect(() => { savePomodoro(pomo); }, [pomo]);
+
+  // Recurring reminder config (buzz every N min focus / break).
+  const [reminder, setReminder] = useState<ReminderConfig>(() => loadReminder());
+  useEffect(() => { saveReminder(reminder); }, [reminder]);
 
   // Schedules pomodoro + escalating pause alerts.
   useTimerAlerts(active);
@@ -247,6 +252,47 @@ export function TodayScreen() {
         </section>
         </div>
 
+        <section className="rounded-2xl border border-border bg-card p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TimerIcon className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <div className="text-sm font-semibold">Reminders</div>
+                <div className="text-[11px] text-muted-foreground">
+                  Buzz every {reminder.focusEveryMin}m focus · {reminder.breakEveryMin}m break
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={reminder.enabled}
+              onCheckedChange={(c) => setReminder((r) => ({ ...r, enabled: c }))}
+              aria-label="Enable reminders"
+            />
+          </div>
+          {reminder.enabled && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Focus every (min)</span>
+                <input
+                  type="number" min={1} max={120}
+                  value={reminder.focusEveryMin}
+                  onChange={(e) => setReminder((r) => ({ ...r, focusEveryMin: Math.min(120, Math.max(1, Number(e.target.value) || 1)) }))}
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Break every (min)</span>
+                <input
+                  type="number" min={1} max={120}
+                  value={reminder.breakEveryMin}
+                  onChange={(e) => setReminder((r) => ({ ...r, breakEveryMin: Math.min(120, Math.max(1, Number(e.target.value) || 1)) }))}
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </label>
+            </div>
+          )}
+        </section>
+
         <section className="space-y-3 pb-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Timeline</h2>
@@ -271,6 +317,7 @@ export function TodayScreen() {
       {active && activeCat && !saveOpen && (
         <FocusMode
           activeMs={activeMs}
+          breakMs={computeBreakMs()}
           categoryName={activeCat.name}
           isPaused={isPaused}
           note={noteDraft}
