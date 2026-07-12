@@ -17,6 +17,7 @@ import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserSession
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import java.security.MessageDigest
 import java.util.UUID
@@ -163,23 +164,26 @@ class AuthManager(context: Context) {
      * production path on a real watch.
      */
     /**
-     * Sign in with a short handle (e.g. "nlal029") + password.
-     * Looks up the email from public.user_profiles, then signs in with email + password.
+     * Sign in with a short handle (e.g. "nlal") + password.
+     * user_profiles SELECT is locked to owners (RLS), so the handle→email lookup goes through
+     * the SECURITY DEFINER RPC `get_email_for_handle` — the only anon-callable resolution path.
      */
     suspend fun signInWithHandle(handle: String, password: String): Result<Unit> = runCatching<Unit> {
-        val profile = SupabaseProvider.client
-            .from("user_profiles")
-            .select(columns = Columns.list("email", "handle")) {
-                filter { eq("handle", handle.trim().lowercase()) }
-            }
-            .decodeSingleOrNull<UserProfile>()
+        val email = resolveEmailForHandle(handle)
             ?: throw IllegalArgumentException("User ID '${handle.trim()}' not found")
         auth.signInWith(Email) {
-            this.email = profile.email
+            this.email = email
             this.password = password
         }
         persistCurrent()
     }
+
+    private suspend fun resolveEmailForHandle(handle: String): String? = runCatching {
+        SupabaseProvider.client.postgrest
+            .rpc("get_email_for_handle", mapOf("_handle" to handle.trim().removePrefix("@").lowercase()))
+            .decodeAs<String?>()
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
 
     /**
      * Fetch the handle for the currently signed-in user, or null if not found.
@@ -195,9 +199,14 @@ class AuthManager(context: Context) {
             ?.handle
     }.getOrNull()
 
-    suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
+    /** Accepts a full email OR a short handle — handles resolve via the sign-in RPC. */
+    suspend fun signInWithEmail(identifier: String, password: String): Result<Unit> = runCatching {
+        val normalized = identifier.trim().removePrefix("@").lowercase()
+        val email = if (normalized.contains("@")) normalized
+        else resolveEmailForHandle(normalized)
+            ?: throw IllegalArgumentException("User ID '$normalized' not found")
         auth.signInWith(Email) {
-            this.email = email.trim()
+            this.email = email
             this.password = password
         }
         persistCurrent()
@@ -208,7 +217,10 @@ class AuthManager(context: Context) {
         prefs.edit().clear().apply()
     }
 
-    fun currentUserId(): String? = auth.currentSessionOrNull()?.user?.id
+    // Falls back to the last persisted id so a block logged right after restore (before the
+    // token refresh hydrates the user object) is still attributed instead of silently dropped.
+    fun currentUserId(): String? =
+        auth.currentSessionOrNull()?.user?.id ?: prefs.getString(KEY_USER_ID, null)
 
     /**
      * Best-effort user id for queuing blocks: the live session id, or the last id we persisted.
@@ -222,16 +234,13 @@ class AuthManager(context: Context) {
 
     private fun persistCurrent() {
         val s = auth.currentSessionOrNull() ?: return
-        prefs.edit()
+        val editor = prefs.edit()
             .putString(KEY_ACCESS, s.accessToken)
             .putString(KEY_REFRESH, s.refreshToken)
-            .apply()
-        s.user?.let { u ->
-            prefs.edit()
-                .putString(KEY_USER_ID, u.id)
-                .putString(KEY_EMAIL, u.email)
-                .apply()
-        }
+        // Never clobber the last known user id/email with null (user object may not be hydrated yet).
+        s.user?.id?.let { editor.putString(KEY_USER_ID, it) }
+        s.user?.email?.let { editor.putString(KEY_EMAIL, it) }
+        editor.apply()
     }
 
     private companion object {
