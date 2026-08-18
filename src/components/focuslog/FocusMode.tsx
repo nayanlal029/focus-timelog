@@ -24,6 +24,7 @@ export function FocusMode({
   const [revealed, setRevealed] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
   const [isFs, setIsFs] = useState(false);
+  const [lapOpen, setLapOpen] = useState(false);
   const hideTimer = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
