@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, Square, Pencil, Maximize2, Minimize2, X } from "lucide-react";
+import { Pause, Play, Square, Pencil, Maximize2, Minimize2, X, Plus } from "lucide-react";
 import { fmtHMS, haptic } from "@/lib/focuslog/format";
 import { Textarea } from "@/components/ui/textarea";
+import { LapTimer } from "@/components/focuslog/LapTimer";
 import { cn } from "@/lib/utils";
 
 interface Props {
