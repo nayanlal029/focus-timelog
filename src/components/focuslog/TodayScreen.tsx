@@ -95,12 +95,14 @@ export function TodayScreen() {
 
   const handleSave = (note: string) => {
     stopActivity(note);
+    clearLaps();
     setSaveOpen(false);
     setDraft(null);
     setNoteDraft("");
   };
   const handleDiscard = () => {
     cancelActivity();
+    clearLaps();
     setSaveOpen(false);
     setDraft(null);
     setNoteDraft("");
