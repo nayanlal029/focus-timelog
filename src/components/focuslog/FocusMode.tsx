@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, Square, Pencil, Maximize2, Minimize2, X } from "lucide-react";
+import { Pause, Play, Square, Pencil, Maximize2, Minimize2, X, Plus } from "lucide-react";
 import { fmtHMS, haptic } from "@/lib/focuslog/format";
 import { Textarea } from "@/components/ui/textarea";
+import { LapTimer } from "@/components/focuslog/LapTimer";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -23,6 +24,7 @@ export function FocusMode({
   const [revealed, setRevealed] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
   const [isFs, setIsFs] = useState(false);
+  const [lapOpen, setLapOpen] = useState(false);
   const hideTimer = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -104,23 +106,43 @@ export function FocusMode({
         {categoryName}{isPaused ? " · paused" : ""}
       </div>
 
-      {/* Big timer — always visible. When paused, show red break/distraction timer. */}
-      <div className="flex flex-col items-center">
+      {/* Big timer — always visible. When paused, show red break/distraction timer.
+          When the lap timer is open, the main timer recedes to a compact readout. */}
+      <div className="flex w-full flex-col items-center px-4">
         <div
           className={cn(
-            "font-bold tabular-nums tracking-tight leading-none",
-            "text-[clamp(72px,22vw,180px)]",
+            "font-bold tabular-nums tracking-tight leading-none transition-all duration-300",
+            lapOpen ? "text-[clamp(28px,6vw,40px)] opacity-50" : "text-[clamp(72px,22vw,180px)]",
             isPaused ? "text-distraction" : "text-foreground",
           )}
         >
           {fmtHMS(isPaused ? breakMs : activeMs)}
         </div>
-        {isPaused && (
+        {isPaused && !lapOpen && (
           <div className="mt-3 text-xs uppercase tracking-[0.3em] text-distraction/80">
             Distracted · focus {fmtHMS(activeMs)}
           </div>
         )}
-        {note && (
+
+        {lapOpen ? (
+          <div className="mt-5 w-full flex justify-center">
+            <LapTimer onClose={() => setLapOpen(false)} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); haptic(10); setLapOpen(true); reveal(); }}
+            aria-label="Start lap timer"
+            className={cn(
+              "mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card/70 text-muted-foreground backdrop-blur transition-opacity duration-300 hover:text-foreground active:scale-95",
+              revealed ? "opacity-100" : "opacity-30",
+            )}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        )}
+
+        {note && !lapOpen && (
           <div
             className={cn(
               "mt-6 max-w-xs px-4 text-center text-sm text-muted-foreground transition-opacity",
