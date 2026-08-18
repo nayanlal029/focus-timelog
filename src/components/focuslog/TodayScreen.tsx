@@ -12,6 +12,7 @@ import {
   loadPomodoro, savePomodoro, loadReminder, saveReminder, useTimerAlerts,
   type PomodoroConfig, type ReminderConfig,
 } from "@/lib/focuslog/alerts";
+import { clearLaps } from "@/lib/focuslog/laps";
 import { cn } from "@/lib/utils";
 
 export function TodayScreen() {
