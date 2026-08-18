@@ -42,9 +42,14 @@ export function LapTimer({ onClose }: Props) {
 
   const pause = () => {
     haptic(12);
-    setState((s) => s.runningSince
-      ? { ...s, accumulatedMs: currentLapMs(s, Date.now()), runningSince: null }
-      : s);
+    const pausedState = state.runningSince
+      ? { ...state, accumulatedMs: currentLapMs(state, Date.now()), runningSince: null }
+      : state;
+
+    // Persist before closing: closing unmounts this component, so relying on
+    // the state effect would leave the previous running timestamp in storage.
+    saveLaps(pausedState);
+    setState(pausedState);
     onClose();
   };
 
