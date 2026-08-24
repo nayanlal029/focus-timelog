@@ -7,7 +7,7 @@ import {
 import { cn } from "@/lib/utils";
 
 interface Props {
-  /** Called when the sub-timer pauses / closes so the main timer resurfaces. */
+  /** Called only when the sub-timer is closed so the main timer resurfaces. */
   onClose: () => void;
 }
 
@@ -46,10 +46,19 @@ export function LapTimer({ onClose }: Props) {
       ? { ...state, accumulatedMs: currentLapMs(state, Date.now()), runningSince: null }
       : state;
 
-    // Persist before closing: closing unmounts this component, so relying on
-    // the state effect would leave the previous running timestamp in storage.
     saveLaps(pausedState);
     setState(pausedState);
+    setNow(Date.now());
+  };
+
+  const close = () => {
+    haptic(8);
+    const pausedState = state.runningSince
+      ? { ...state, accumulatedMs: currentLapMs(state, Date.now()), runningSince: null }
+      : state;
+
+    // Persist before unmounting so closing never leaves the sub-timer running.
+    saveLaps(pausedState);
     onClose();
   };
 
@@ -87,7 +96,7 @@ export function LapTimer({ onClose }: Props) {
         </span>
         <button
           type="button"
-          onClick={() => { pause(); }}
+          onClick={close}
           aria-label="Close lap timer"
           className="rounded-full border border-border p-1 text-muted-foreground hover:text-foreground"
         >
