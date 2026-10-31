@@ -126,7 +126,7 @@ The closing question is ambiguous; I read it as "get this retro into my local se
 ### Phase 11 — Retrospective (2026-10-31 18:14–18:30Z)
 - The cloud container had been re-provisioned: the local clone was reset to `claude/fervent-noether-9h2ayh`@0a25e68 with only `main` locally, `/tmp/pending_blocks_import.sql` and the uploaded CSV were gone (verified), the git remote was now `https://github.com/nayanlal029/focus-timelog`. The user switched the session's model via `/model` at 18:14:01Z and sent the retro request at 18:14:50Z.
 - **Verification run:** parsed the raw transcript; `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`; GitHub API for PRs and branches; read current code on `origin/main`. Discovered three things the chat did not know: PR #8 merged; `main` and the build branch moved on and the sync code was refactored into `watch/core/`; the worker-auth change is absent.
-- Because PR #8 had merged, the session branch was **restarted from `origin/main` (8b4d9a1)** (same branch name) before committing this file, per the rule against stacking commits on merged history.
+- Because PR #8 had merged, the session branch was **restarted locally from `origin/main` (8b4d9a1)** (same branch name) before committing this file, per the rule against stacking commits on merged history. I first planned a `--force-with-lease` push; the auto-mode classifier denied it as "Git Destructive" (that command never ran, so it also held back the commit). It was unnecessary anyway: the old remote tip 0a25e68 is an ancestor of `main`, so the new commit is a descendant and a **plain push is a fast-forward** (`0a25e68..f3b8225`). Nothing on the remote was rewritten.
 
 ## 4. Work by category
 
@@ -168,7 +168,7 @@ The closing question is ambiguous; I read it as "get this retro into my local se
 | `/tmp/pending_blocks_import.sql` | container only | created | 36-row idempotent INSERT (contains the user's data — never committed) | ❌ **Lost with the container** (verified gone 2026-10-31). The user received a copy via `SendUserFile`; regenerate with the section 12 script |
 | `/root/.claude/uploads/c9062486-…/df5cdb7a-focuslog_dbpending_blocks.csv` | user upload | referenced | the user's `pending_blocks` export | ❌ container copy gone (verified); original is on the user's Mac |
 | Android Studio Agent edits + any user-local worker-auth edit | user's Mac | n/a | never visible to this session | ❓ Not on `origin` as of 2026-10-31 (worker-auth change absent) — **may be lost** |
-| `docs/session-retros/2026-06-20_watch-sync-recovery.md` | @claude/fervent-noether-9h2ayh (restarted from origin/main 8b4d9a1) | created | this retrospective | ✅ pushed (SHA in the closing chat message; `git log -1 -- docs/session-retros/2026-06-20_watch-sync-recovery.md`) |
+| `docs/session-retros/2026-06-20_watch-sync-recovery.md` | @claude/fervent-noether-9h2ayh (restarted locally from origin/main 8b4d9a1) | created (f3b8225), then corrected in a follow-up commit | this retrospective | ✅ pushed as plain fast-forwards (first commit f3b8225; `git log -- docs/session-retros/2026-06-20_watch-sync-recovery.md` lists both) |
 
 Note: the files above were later moved by someone else's refactor — `SupabaseRepository.kt`, `SyncWorker.kt`, `WatchSettings.kt`, `Daos.kt`, `AuthManager.kt` now live under `watch/core/src/main/java/com/focuslog/core/…` (verified on `origin/main` 2026-10-31); a phone app lives in `watch/mobile/`.
 
@@ -180,7 +180,7 @@ Note: the files above were later moved by someone else's refactor — `SupabaseR
 |---|---|---|
 | `main` | 8b4d9a1 "Kept paused sub-timer open" (2026-08-24) | Default branch; contains PR #8 (00dcd24) and 74463fc; superset of the build branch |
 | `claude/write-product-document-iKHKL` | dc85b26 "mobile: defensive Material3 opt-in on Settings/Today screens" (2026-08-23) | The user's long-lived build branch; ancestor of `main` (verified) |
-| `claude/fervent-noether-9h2ayh` | was 0a25e68 (fully merged); after this push = `main` + 1 commit (this retro) | Session-designated branch. Reset with force-with-lease because PR #8 had merged; 0a25e68 stays reachable from `main` and PR #8 |
+| `claude/fervent-noether-9h2ayh` | was 0a25e68 (fully merged); now = `main` (8b4d9a1) + this retro's commits (f3b8225 + a correction commit) | Session-designated branch. Restarted locally from `main` because PR #8 had merged, then pushed as a plain fast-forward (0a25e68 is an ancestor of `main`) — no force push; 0a25e68 stays reachable from `main` and PR #8 |
 | `claude/quirky-lovelace-v3twc7` | 7b4650e "Add CLAUDE.md and sync docs with the current (post-Lovable) app" (2026-07-03) | Another session's branch; not touched; no watch-file overlap |
 
 **Commits made by this session:**
@@ -191,7 +191,8 @@ Note: the files above were later moved by someone else's refactor — `SupabaseR
 | 1079902 | 2026-06-20 21:07 | Log the real reason a block upload fails | fervent-noether | ✅ |
 | 0a25e68 | 2026-06-21 18:02 | Upsert time blocks on sync to make it idempotent | fervent-noether | ✅ |
 | 74463fc | 2026-06-21 20:58 | Watch: auto-sync queued blocks in background + live sync status | write-product-document-iKHKL | ✅ (verified `merge-base --is-ancestor`) |
-| (this file) | 2026-10-31 | docs: add session retrospective for watch sync recovery | fervent-noether | not yet (no PR, by instruction) |
+| f3b8225 | 2026-10-31 | docs: add session retrospective for watch sync recovery | fervent-noether | not yet (no PR, by instruction) |
+| (follow-up; see `git log`) | 2026-10-31 | docs: correct push details in session retrospective | fervent-noether | not yet |
 
 Related commits by others (context): 00dcd24 merge of PR #8 (2026-06-21 18:41Z); 281fb00 "Android: phone app (:mobile) + shared :core + automatic watch sign-in over the Data Layer" (2026-07-07); 87f8b47 "Merge remote watch auto-sync commit (74463fc); its changes are already ported into :core/:wear in the module refactor" (2026-07-07).
 
@@ -235,7 +236,7 @@ Counts come from the raw transcript parsed at 2026-10-31T18:19Z; a few more call
 |---|---|---|---|---|
 | Read | Reading source, migrations, docs, the CSV | ~42 | Yes | 1 error: `README.md` does not exist |
 | Edit | All code changes (both branches) | ~37 | Yes | none |
-| Bash | git, `find`, shell compares, Python (CSV→SQL, transcript parse), commits and pushes | ~30 | Yes | none |
+| Bash | git, `find`, shell compares, Python (CSV→SQL, transcript parse), commits and pushes | ~33 | Yes (1 denial) | 1 command (commit + `--force-with-lease` push) was denied by the auto-mode classifier as "Git Destructive" and never ran; redone as a separate commit + plain fast-forward push |
 | Grep | Call-site hunt (`SyncWorker`, `enqueue`, …), later `git grep` for state | 3 (+ `git grep` via Bash) | Yes | none |
 | Write | This file | 1 | Yes | — |
 | AskUserQuestion | Which branch to fix; how much prevention to build | 1 (2 questions) | Yes | none |
@@ -269,7 +270,7 @@ Session metrics reported by `get_session` at 2026-10-31T18:18Z: cost ≈ US$3.24
 | Prevention scope = "visible status + auto-sync" (user's choice) | Self-heals and is observable: periodic worker + reactive count + last-synced | Core fix only; core + periodic only |
 | Give the Android Studio agent a paste-ready instruction rather than pushing another commit | Its edits were local and unpushed; another push would conflict | Pushing a competing commit |
 | Recommend the debug APK for quick sharing; do not change ProGuard rules uninvited | Release minify config likely crashes; user only asked whether the steps were valid | Editing `proguard-rules.pro` unrequested |
-| Retro: restart the session branch from `origin/main` and force-with-lease; no PR | PR #8 had merged — new work must not stack on merged history; user said no PR | Committing on top of 0a25e68; opening a PR |
+| Retro: restart the session branch locally from `origin/main`, commit on top, plain push (fast-forward); no PR | PR #8 had merged — new work must not stack on merged history; the old remote tip 0a25e68 is an ancestor of `main`, so no force push is needed (a planned `--force-with-lease` was denied by the auto-mode classifier as destructive); user said no PR | Force-with-lease reset; committing on top of 0a25e68; opening a PR |
 | Retro: leave `model:` blank in the pushed file | Environment rule keeps model identifiers out of repo files | Filling it in anyway |
 
 ## 8. What went well
@@ -299,6 +300,7 @@ Session metrics reported by `get_session` at 2026-10-31T18:18Z: cost ≈ US$3.24
 | Chat said the build branch was "21 commits" ahead; actual is 19 (18 non-merge) | Minor | Miscount | Corrected here |
 | Two "Retry" prompts on 2026-06-21 (10:35Z, 10:40Z) | ~20 min | Cause not recorded; connector churn suspected | Resolved by retry |
 | `SendUserFile` first call failed (unquoted path); `Read` of a non-existent README | Trivial | Typo / assumption | Fixed on retry |
+| Planned a `--force-with-lease` push for this retro; the auto-mode classifier denied it ("Git Destructive") | One extra round; the denied command also held the commit | Assumed "restart the branch from main" implies a force push, without first checking that the old remote tip is an ancestor of `main` (it is) | Resolved: separate commit, then a plain fast-forward push |
 | Row count in Supabase never read back | "36 rows imported" is user-reported, not verified | I offered a read-back query; the user did not report its result | **Open** (section 13 item 3) |
 
 ## 10. Learnings
@@ -317,7 +319,7 @@ Session metrics reported by `get_session` at 2026-10-31T18:18Z: cost ≈ US$3.24
 - Next time, run `git branch -a` and look at the user's IDE screenshot to find the branch they actually build from **before** committing to the session-designated branch; ask if unsure.
 - Next time, remember a cloud checkout never contains git-ignored local files (e.g. `watch/secrets.properties`); ask the user instead of inferring their absence.
 - Next time after a long idle gap or a re-provisioned container, re-fetch and re-check PR state before saying anything is "pending" or "redundant".
-- Next time a session branch's PR has merged, restart the branch from the default branch and push with `--force-with-lease` — do not stack commits.
+- Next time a session branch's PR has merged, restart the branch locally from the default branch (`git checkout -B <branch> origin/main`) and commit on top — do not stack on merged history. First run `git merge-base --is-ancestor <old-remote-tip> HEAD`: if true, a plain `git push` is a fast-forward and no force is needed (a `--force-with-lease` push is classed "destructive" and was denied in auto mode).
 - Next time, `SendUserFile` needs `files` as a JSON array of quoted paths.
 - Next time, the GitHub list-PR endpoint may return `merged:false` — trust `merged_at` / the merge commit.
 - Next time, for a retro, parse `~/.claude/projects/<cwd with "/" replaced by "-">/<session-id>.jsonl` with `python3 -I` (counts, timestamps, user turns, compaction markers).
@@ -522,7 +524,7 @@ Context: watch blocks used to strand in the local Room table pending_blocks beca
 
 Task: SyncWorker.doWork() (watch/core/src/main/java/com/focuslog/core/data/SyncWorker.kt) does not restore the auth session, and SupabaseProvider.kt has autoLoadFromStorage = false. A worker that starts in a cold process therefore likely uploads without a session and RLS rejects it. Confirm by reading the current code, then fix it (e.g. call AuthManager(applicationContext).restore() — or load the stored session in SupabaseProvider — before flushPending, and make sure a failed restore is logged under the FocusLogSync tag and retried). Also consider skip-and-continue handling so one permanently rejected block cannot wedge the queue.
 
-Constraints: the cloud sandbox has no Android SDK, so do not claim a build passed — tell me exactly what to build and test in Android Studio (force-stop the app, trigger the worker, read `adb logcat -s FocusLogSync`). watch/secrets.properties already exists on my Mac (git-ignored) — never ask me to recreate it. Never suggest uninstalling the watch app or clearing its data. Use upsert for writes. Push only to the session's designated branch; if its PR has merged, restart the branch from main and use --force-with-lease. Do not open a PR unless I ask.
+Constraints: the cloud sandbox has no Android SDK, so do not claim a build passed — tell me exactly what to build and test in Android Studio (force-stop the app, trigger the worker, read `adb logcat -s FocusLogSync`). watch/secrets.properties already exists on my Mac (git-ignored) — never ask me to recreate it. Never suggest uninstalling the watch app or clearing its data. Use upsert for writes. Push only to the session's designated branch; if its PR has merged, restart the branch from main (git checkout -B <branch> origin/main), commit on top and use a plain push (a fast-forward when the old tip is already merged into main) — avoid force pushes. Do not open a PR unless I ask.
 ```
 
 ## 16. Gaps and confidence
